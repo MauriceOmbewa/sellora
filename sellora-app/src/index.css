@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap');
+
+@theme {
+  /* ── Colors ───────────────────────────────────────── */
+  --color-ivory: #FAF8F3;
+  --color-ink: #171B21;
+  --color-ink-soft: #262B33;
+  --color-gold: #C79A3D;
+  --color-gold-deep: #A67D28;
+  --color-gold-light: #F5EDD9;
+  --color-green: #3F6B4F;
+  --color-green-light: #E8F0EB;
+  --color-slate: #6B7280;
+  --color-sand: #E7E2D8;
+  --color-sand-dark: #D4CDBF;
+  --color-red: #B84A3E;
+  --color-red-light: #FAEAE9;
+  --color-blue: #2563EB;
+  --color-blue-light: #EFF6FF;
+  --color-white: #FFFFFF;
+
+  /* ── Fonts ────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+}
+
+/* ── Brand CSS variables (overridden per-tenant on storefront) ── */
+:root {
+  --brand-primary: #C79A3D;
+  --brand-primary-hover: #A67D28;
+  --brand-accent: #3F6B4F;
+  --brand-background: #FAF8F3;
+  --brand-text: #171B21;
+}
+
+/* ── Base reset ───────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: var(--color-ivory);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+/* ── Headings use serif ───────────────────────────────── */
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D4CDBF; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #6B7280; }
+
+/* ── Focus ring ───────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* ── Link / button transitions ───────────────────────── */
+a, button { transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, transform 0.15s ease; }
+
+/* ── Skeleton shimmer ────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #E7E2D8 25%, #F0EDE6 50%, #E7E2D8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ── Toast slide-in ──────────────────────────────────── */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.toast-enter { animation: slide-in-right 0.25s ease-out forwards; }
+
+/* ── Fade in ─────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fade-in 0.3s ease-out forwards; }
+
+/* ── Backdrop ────────────────────────────────────────── */
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.backdrop-enter { animation: backdrop-in 0.2s ease-out forwards; }

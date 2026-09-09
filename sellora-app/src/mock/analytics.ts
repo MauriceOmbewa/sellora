@@ -1,0 +1,78 @@
+import type { AnalyticsSummary, RevenueDataPoint } from '@/types'
+
+// 30 days of revenue data
+export const mockRevenueData: RevenueDataPoint[] = [
+  { date: '2026-08-10', revenue: 62000, orders: 18 },
+  { date: '2026-08-11', revenue: 45000, orders: 13 },
+  { date: '2026-08-12', revenue: 78000, orders: 22 },
+  { date: '2026-08-13', revenue: 91000, orders: 27 },
+  { date: '2026-08-14', revenue: 83000, orders: 24 },
+  { date: '2026-08-15', revenue: 104000, orders: 31 },
+  { date: '2026-08-16', revenue: 55000, orders: 16 },
+  { date: '2026-08-17', revenue: 68000, orders: 20 },
+  { date: '2026-08-18', revenue: 72000, orders: 21 },
+  { date: '2026-08-19', revenue: 88000, orders: 26 },
+  { date: '2026-08-20', revenue: 95000, orders: 28 },
+  { date: '2026-08-21', revenue: 79000, orders: 23 },
+  { date: '2026-08-22', revenue: 112000, orders: 34 },
+  { date: '2026-08-23', revenue: 66000, orders: 19 },
+  { date: '2026-08-24', revenue: 82000, orders: 24 },
+  { date: '2026-08-25', revenue: 98000, orders: 29 },
+  { date: '2026-08-26', revenue: 87000, orders: 26 },
+  { date: '2026-08-27', revenue: 73000, orders: 22 },
+  { date: '2026-08-28', revenue: 115000, orders: 35 },
+  { date: '2026-08-29', revenue: 68000, orders: 20 },
+  { date: '2026-08-30', revenue: 84000, orders: 25 },
+  { date: '2026-08-31', revenue: 92000, orders: 28 },
+  { date: '2026-09-01', revenue: 76000, orders: 22 },
+  { date: '2026-09-02', revenue: 103000, orders: 31 },
+  { date: '2026-09-03', revenue: 89000, orders: 27 },
+  { date: '2026-09-04', revenue: 118000, orders: 36 },
+  { date: '2026-09-05', revenue: 95000, orders: 29 },
+  { date: '2026-09-06', revenue: 74000, orders: 22 },
+  { date: '2026-09-07', revenue: 108000, orders: 32 },
+  { date: '2026-09-08', revenue: 84200, orders: 37 },
+]
+
+export const mockWeeklyData: RevenueDataPoint[] = [
+  { date: 'Mon', revenue: 62000, orders: 18 },
+  { date: 'Tue', revenue: 78000, orders: 22 },
+  { date: 'Wed', revenue: 55000, orders: 16 },
+  { date: 'Thu', revenue: 98000, orders: 29 },
+  { date: 'Fri', revenue: 86000, orders: 25 },
+  { date: 'Sat', revenue: 112000, orders: 34 },
+  { date: 'Today', revenue: 84200, orders: 37 },
+]
+
+export const mockAnalytics: AnalyticsSummary = {
+  totalRevenue: 2840000,
+  totalOrders: 847,
+  totalCustomers: 312,
+  averageOrderValue: 3354,
+  revenueChange: 14.2,
+  ordersChange: 8.7,
+  customersChange: 22.4,
+  aovChange: 5.1,
+  revenueData: mockRevenueData,
+  topProducts: [
+    { productId: 'prod-001', productName: 'Velvet Oud', totalSold: 84, revenue: 403200, percentageOfTotal: 14.2 },
+    { productId: 'prod-002', productName: 'Midnight Bloom', totalSold: 67, revenue: 241200, percentageOfTotal: 8.5 },
+    { productId: 'prod-005', productName: 'Rose Elixir', totalSold: 58, revenue: 185600, percentageOfTotal: 6.5 },
+    { productId: 'prod-003', productName: 'Ocean Mist', totalSold: 52, revenue: 145600, percentageOfTotal: 5.1 },
+    { productId: 'prod-004', productName: 'Amber Noir', totalSold: 41, revenue: 213200, percentageOfTotal: 7.5 },
+  ],
+  categoryPerformance: [
+    { categoryId: 'cat-001', categoryName: 'Eau de Parfum', totalSold: 166, revenue: 640000, percentageOfTotal: 22.5 },
+    { categoryId: 'cat-003', categoryName: 'Oud & Oriental', totalSold: 125, revenue: 600000, percentageOfTotal: 21.1 },
+    { categoryId: 'cat-002', categoryName: 'Eau de Toilette', totalSold: 115, revenue: 323200, percentageOfTotal: 11.4 },
+    { categoryId: 'cat-004', categoryName: 'Gift Sets', totalSold: 19, revenue: 142500, percentageOfTotal: 5.0 },
+  ],
+  customerGrowth: [
+    { date: 'Apr', newCustomers: 22, returningCustomers: 18, totalCustomers: 180 },
+    { date: 'May', newCustomers: 28, returningCustomers: 25, totalCustomers: 208 },
+    { date: 'Jun', newCustomers: 31, returningCustomers: 30, totalCustomers: 239 },
+    { date: 'Jul', newCustomers: 18, returningCustomers: 28, totalCustomers: 257 },
+    { date: 'Aug', newCustomers: 35, returningCustomers: 38, totalCustomers: 292 },
+    { date: 'Sep', newCustomers: 20, returningCustomers: 22, totalCustomers: 312 },
+  ],
+}

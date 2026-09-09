@@ -32,14 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = JSON.parse(stored) as User
         setUser(parsed)
-        // Load businesses
+        // Load businesses — restore previously selected one if saved
         businessService.getAll().then(bizList => {
           setBusinesses(bizList)
           const storedBizId = localStorage.getItem(BUSINESS_KEY)
-          const current = storedBizId
-            ? bizList.find(b => b.id === storedBizId) ?? bizList[0]
-            : bizList[0]
-          setCurrentBusinessState(current ?? null)
+          if (storedBizId) {
+            const current = bizList.find(b => b.id === storedBizId) ?? null
+            setCurrentBusinessState(current)
+          }
           setAuthState(bizList.length === 0 ? 'needs-onboarding' : 'authenticated')
         })
       } catch {
@@ -71,8 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (bizList.length === 0) {
       setAuthState('needs-onboarding')
     } else {
-      setCurrentBusinessState(bizList[0])
-      localStorage.setItem(BUSINESS_KEY, bizList[0].id)
+      // Don't auto-select a business here — user picks from /businesses
+      // Clear any previously stored business so they always choose fresh
+      localStorage.removeItem(BUSINESS_KEY)
+      setCurrentBusinessState(null)
       setAuthState('authenticated')
     }
   }, [])

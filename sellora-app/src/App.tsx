@@ -57,7 +57,8 @@ function PageLoader() {
 
 function AuthenticatedRedirect({ children }: { children: React.ReactNode }) {
   const { authState } = useAuth()
-  if (authState === 'authenticated') return <Navigate to="/app" replace />
+  // If already signed in, send to /businesses to pick a business
+  if (authState === 'authenticated') return <Navigate to="/businesses" replace />
   if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
@@ -67,6 +68,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   if (authState === 'loading') return <PageLoader />
   if (authState === 'unauthenticated') return <Navigate to="/login" replace />
   if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
+  return <>{children}</>
+}
+
+// Dashboard specifically requires a business to be selected
+function RequireBusiness({ children }: { children: React.ReactNode }) {
+  const { authState, currentBusiness } = useAuth()
+  if (authState === 'loading') return <PageLoader />
+  if (authState === 'unauthenticated') return <Navigate to="/login" replace />
+  if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
+  // If authenticated but no business chosen yet, send to /businesses
+  if (!currentBusiness) return <Navigate to="/businesses" replace />
   return <>{children}</>
 }
 
@@ -102,13 +114,13 @@ function AppRoutes() {
           }
         />
 
-        {/* Dashboard */}
+        {/* Dashboard — requires a business to be selected */}
         <Route
           path="/app"
           element={
-            <RequireAuth>
+            <RequireBusiness>
               <DashboardLayout />
-            </RequireAuth>
+            </RequireBusiness>
           }
         >
           <Route index element={<OverviewPage />} />

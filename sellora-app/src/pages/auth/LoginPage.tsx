@@ -25,7 +25,8 @@ export default function LoginPage() {
     setError('')
     try {
       await signInWithGoogle()
-      navigate('/app', { replace: true })
+      // Always go to /businesses after login — user picks which business to open
+      navigate('/businesses', { replace: true })
     } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)

@@ -114,15 +114,10 @@ function AppRoutes() {
         {/* Onboarding */}
         <Route path="/onboarding" element={<OnboardingPage />} />
 
-        {/* My businesses */}
-        <Route
-          path="/businesses"
-          element={
-            <RequireAuth>
-              <MyBusinessesPage />
-            </RequireAuth>
-          }
-        />
+        {/* My businesses — handles both authenticated users AND the post-OAuth
+            token callback. Must NOT be behind RequireAuth because it processes
+            the tokens from the URL before the auth state is established. */}
+        <Route path="/businesses" element={<MyBusinessesPage />} />
 
         {/* Dashboard — requires a business to be selected */}
         <Route

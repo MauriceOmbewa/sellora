@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, ArrowRight, TrendingUp, ShoppingBag, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Avatar } from '@/components/ui'
+import { tokenStorage } from '@/services/api'
 import type { Business } from '@/types'
 
 const categoryLabels: Record<string, string> = {
@@ -91,26 +92,42 @@ export default function MyBusinessesPage() {
 
   // ── Handle tokens arriving from Google OAuth callback ──────────────────────
   // Backend redirects to: /businesses?access=TOKEN&refresh=TOKEN
+  // This MUST run before any auth guard check.
   useEffect(() => {
     const access = searchParams.get('access')
     const refresh = searchParams.get('refresh')
     const message = searchParams.get('message')
 
     if (message) {
-      setCallbackError(message)
+      setCallbackError(decodeURIComponent(message))
       setSearchParams({}, { replace: true })
       return
     }
 
     if (access && refresh) {
-      setCallbackLoading(true)
-      // Clean URL immediately so tokens aren't visible/bookmarkable
+      // Strip tokens from URL immediately — never leave them visible
       setSearchParams({}, { replace: true })
+      setCallbackLoading(true)
       handleAuthCallback(access, refresh)
-        .catch(err => setCallbackError(err?.message ?? 'Sign-in failed'))
+        .catch(err => setCallbackError(err?.message ?? 'Sign-in failed. Please try again.'))
         .finally(() => setCallbackLoading(false))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Redirect to /login if no tokens and not authenticated ─────────────────
+  // Only redirect once authState has settled (not 'loading') and there are
+  // no URL tokens being processed.
+  useEffect(() => {
+    const hasUrlTokens = searchParams.get('access') || searchParams.get('refresh')
+    if (callbackLoading || hasUrlTokens) return
+
+    if (authState === 'unauthenticated') {
+      navigate('/login', { replace: true })
+    }
+    if (authState === 'needs-onboarding') {
+      navigate('/onboarding', { replace: true })
+    }
+  }, [authState, callbackLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpen = (biz: Business) => {
     setCurrentBusiness(biz)
@@ -119,9 +136,25 @@ export default function MyBusinessesPage() {
 
   const handleAdd = () => navigate('/onboarding')
 
+  // Show full-page loader while processing the OAuth callback or while auth
+  // state is still resolving (avoids flash of unauthenticated content)
+  if (callbackLoading || authState === 'loading') {
+    return (
+      <div className="min-h-screen bg-ivory flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-[10px] bg-gold flex items-center justify-center font-serif font-bold text-ink text-[18px]">S</div>
+          <div className="w-5 h-5 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+          <p className="text-[13.5px] text-slate">
+            {callbackLoading ? 'Completing sign-in…' : 'Loading…'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-ivory">
-      {/* Callback loading overlay */}
+      {/* Callback loading overlay — shown while handleAuthCallback runs */}
       {callbackLoading && (
         <div className="fixed inset-0 bg-ivory/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">

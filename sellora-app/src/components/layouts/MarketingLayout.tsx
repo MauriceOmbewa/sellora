@@ -30,8 +30,7 @@ export function MarketingLayout() {
   }, [location])
 
   const handleSignOut = () => {
-    signOut()
-    navigate('/')
+    signOut().then(() => navigate('/'))
   }
 
   return (

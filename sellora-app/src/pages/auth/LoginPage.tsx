@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Shield, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
@@ -15,22 +15,14 @@ function GoogleIcon() {
 }
 
 export default function LoginPage() {
-  const { signInWithGoogle } = useAuth()
-  const navigate = useNavigate()
+  const { initiateGoogleSignIn } = useAuth()
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
-  const handleGoogle = async () => {
+  const handleGoogle = () => {
     setLoading(true)
-    setError('')
-    try {
-      await signInWithGoogle()
-      // Always go to /businesses after login — user picks which business to open
-      navigate('/businesses', { replace: true })
-    } catch {
-      setError('Something went wrong. Please try again.')
-      setLoading(false)
-    }
+    // Full browser redirect — no promise, navigates away from the page
+    initiateGoogleSignIn()
+    // Don't setLoading(false) — the page will navigate away
   }
 
   return (
@@ -70,12 +62,8 @@ export default function LoginPage() {
             ) : (
               <GoogleIcon />
             )}
-            {loading ? 'Signing in…' : 'Continue with Google'}
+            {loading ? 'Redirecting to Google…' : 'Continue with Google'}
           </button>
-
-          {error && (
-            <p className="mt-3 text-[13px] text-red font-medium text-center">{error}</p>
-          )}
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
@@ -107,7 +95,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── RIGHT: brand ─────────────────────────────────── */}
+      {/* ── RIGHT: brand panel ─────────────────────────── */}
       <div className="hidden lg:flex flex-col bg-ink px-14 py-14 justify-between relative overflow-hidden">
         {/* Glow */}
         <div
@@ -117,7 +105,9 @@ export default function LoginPage() {
 
         {/* Testimonial */}
         <div className="relative z-10 max-w-[420px]">
-          <p className="text-[12px] font-semibold text-gold uppercase tracking-widest mb-6">Maison Aura · Nairobi</p>
+          <p className="text-[12px] font-semibold text-gold uppercase tracking-widest mb-6">
+            Maison Aura · Nairobi
+          </p>
           <blockquote className="font-serif text-[28px] text-ivory leading-[1.35] font-light italic">
             "I used to close the shop just to reconcile my payments. Now I see everything update live from my phone."
           </blockquote>
@@ -131,7 +121,9 @@ export default function LoginPage() {
         <div className="relative z-10 bg-white/5 border border-white/10 rounded-[14px] p-5 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-[6px] bg-gold flex items-center justify-center font-serif font-bold text-ink text-[12px]">M</div>
+              <div className="w-6 h-6 rounded-[6px] bg-gold flex items-center justify-center font-serif font-bold text-ink text-[12px]">
+                M
+              </div>
               <span className="text-[13px] font-semibold text-ivory">Maison Aura</span>
             </div>
             <span className="text-[11px] text-ivory/50">Today</span>
@@ -142,7 +134,7 @@ export default function LoginPage() {
               { label: 'Orders', value: '37', icon: null },
               { label: 'Low stock', value: '3', icon: null },
             ].map(kpi => (
-              <div key={kpi.label} className="bg-white/8 rounded-[9px] p-3">
+              <div key={kpi.label} className="bg-white/[0.08] rounded-[9px] p-3">
                 <p className="text-[10px] text-ivory/50 mb-1.5">{kpi.label}</p>
                 <div className="flex items-center gap-1.5">
                   <p className="font-serif text-[17px] font-semibold text-ivory">{kpi.value}</p>
@@ -151,14 +143,16 @@ export default function LoginPage() {
               </div>
             ))}
           </div>
-
-          {/* sparkline bars */}
+          {/* Sparkline bars */}
           <div className="mt-4 flex items-end gap-1 h-12">
             {[35, 50, 40, 65, 55, 80, 96].map((h, i) => (
               <div
                 key={i}
                 className="flex-1 rounded-t-[2px]"
-                style={{ height: `${(h / 100) * 48}px`, background: h >= 80 ? '#C79A3D' : 'rgba(255,255,255,0.2)' }}
+                style={{
+                  height: `${(h / 100) * 48}px`,
+                  background: h >= 80 ? '#C79A3D' : 'rgba(255,255,255,0.2)',
+                }}
               />
             ))}
           </div>

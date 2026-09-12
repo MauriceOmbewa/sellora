@@ -167,7 +167,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             <p className="text-[10.5px] text-ivory/50">Owner</p>
           </div>
           <button
-            onClick={() => { signOut(); navigate('/') }}
+            onClick={() => { signOut().then(() => navigate('/')) }}
             aria-label="Sign out"
             className="p-1.5 rounded-[7px] text-ivory/40 hover:text-ivory hover:bg-white/5"
           >

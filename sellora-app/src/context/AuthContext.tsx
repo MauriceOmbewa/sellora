@@ -1,23 +1,158 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+/**
+ * AuthContext — real Google SSO integration
+ *
+ * Flow:
+ *   1. User clicks "Continue with Google"
+ *   2. Browser navigates to GET /api/v1/auth/google/?next=web
+ *   3. Google sign-in happens server-side
+ *   4. Backend redirects to: /businesses?access=TOKEN&refresh=TOKEN
+ *   5. MyBusinessesPage (or the callback route) reads tokens from URL, stores them,
+ *      calls GET /api/v1/auth/me/ to hydrate the user, then loads businesses.
+ *
+ * Token refresh is handled automatically by the api.ts client (single-flight).
+ */
+
+import React, {
+  createContext, useContext, useState, useCallback, useEffect,
+} from 'react'
 import type { User, Business, AuthState } from '@/types'
-import { businessService, authService } from '@/services'
+import { tokenStorage, api, ApiError } from '@/services/api'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
   user: User | null
   authState: AuthState
   businesses: Business[]
   currentBusiness: Business | null
-  signInWithGoogle: () => Promise<void>
-  signOut: () => void
+  initiateGoogleSignIn: () => void
+  signOut: () => Promise<void>
   setCurrentBusiness: (business: Business) => void
   refreshBusinesses: () => Promise<void>
+  /** Called by the /businesses page after tokens land in the URL */
+  handleAuthCallback: (access: string, refresh: string) => Promise<void>
 }
+
+// ── Context ───────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-// Persist session in localStorage (mock only — never store real tokens this way)
-const SESSION_KEY = 'sellora_mock_user'
-const BUSINESS_KEY = 'sellora_mock_business'
+const USER_KEY = 'sellora_user'
+const BUSINESS_KEY = 'sellora_current_business'
+
+// ── Backend response shapes ───────────────────────────────────────────────────
+
+interface MeResponse {
+  success: boolean
+  data: {
+    id: string
+    email: string
+    name: string
+    avatar?: string
+    is_staff: boolean
+    created_at: string
+  }
+}
+
+interface BusinessesResponse {
+  success: boolean
+  results: Array<{
+    id: string
+    name: string
+    slug: string
+    category: string
+    description: string
+    motto: string
+    logo?: string
+    status: string
+    plan: string
+    theme: {
+      primaryColor: string
+      primaryHover: string
+      accentColor: string
+      backgroundColor: string
+      textColor: string
+    }
+    contact: {
+      phone: string
+      whatsapp: string
+      email: string
+      address: string
+      city: string
+      country: string
+      openingHours: string
+    }
+    social_links: {
+      instagram?: string
+      facebook?: string
+      tiktok?: string
+      twitter?: string
+      youtube?: string
+    }
+    hero: {
+      heading: string
+      subheading: string
+      ctaText: string
+      ctaSecondaryText: string
+    }
+    about_text: string
+    total_products: number
+    total_orders: number
+    total_revenue: number
+    total_customers: number
+    created_at: string
+    updated_at: string
+  }>
+}
+
+// ── Mappers — backend snake_case → frontend camelCase ─────────────────────────
+
+function mapUser(raw: MeResponse['data']): User {
+  return {
+    id: raw.id,
+    googleId: raw.id,
+    name: raw.name,
+    email: raw.email,
+    avatar: raw.avatar,
+    createdAt: raw.created_at,
+  }
+}
+
+function mapBusiness(raw: BusinessesResponse['results'][number]): Business {
+  return {
+    id: raw.id,
+    slug: raw.slug,
+    name: raw.name,
+    category: raw.category as Business['category'],
+    description: raw.description,
+    motto: raw.motto,
+    logo: raw.logo,
+    theme: raw.theme,
+    contact: raw.contact,
+    socialLinks: {
+      instagram: raw.social_links?.instagram,
+      facebook: raw.social_links?.facebook,
+      tiktok: raw.social_links?.tiktok,
+      twitter: raw.social_links?.twitter,
+      youtube: raw.social_links?.youtube,
+    },
+    hero: raw.hero,
+    aboutText: raw.about_text,
+    status: raw.status as Business['status'],
+    plan: raw.plan as Business['plan'],
+    ownerId: '',
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    totalProducts: raw.total_products ?? 0,
+    totalOrders: raw.total_orders ?? 0,
+    totalRevenue: raw.total_revenue ?? 0,
+    totalCustomers: raw.total_customers ?? 0,
+  }
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -25,79 +160,129 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [currentBusiness, setCurrentBusinessState] = useState<Business | null>(null)
 
-  // Restore session on mount
+  // ── Restore session on mount ──────────────────────────────────────────────
+
   useEffect(() => {
-    const stored = localStorage.getItem(SESSION_KEY)
-    if (stored) {
+    const access = tokenStorage.getAccess()
+    const storedUser = localStorage.getItem(USER_KEY)
+
+    if (!access) {
+      setAuthState('unauthenticated')
+      return
+    }
+
+    // We have a token — restore user from cache first (instant), then verify
+    if (storedUser) {
       try {
-        const parsed = JSON.parse(stored) as User
-        setUser(parsed)
-        // Load businesses — restore previously selected one if saved
-        businessService.getAll().then(bizList => {
-          setBusinesses(bizList)
-          const storedBizId = localStorage.getItem(BUSINESS_KEY)
-          if (storedBizId) {
-            const current = bizList.find(b => b.id === storedBizId) ?? null
-            setCurrentBusinessState(current)
-          }
-          setAuthState(bizList.length === 0 ? 'needs-onboarding' : 'authenticated')
-        })
+        setUser(JSON.parse(storedUser) as User)
       } catch {
-        localStorage.removeItem(SESSION_KEY)
-        setAuthState('unauthenticated')
+        // ignore parse errors
       }
-    } else {
+    }
+
+    // Verify token is still valid by calling /me
+    api.get<MeResponse>('/api/v1/auth/me/')
+      .then(res => {
+        const mappedUser = mapUser(res.data)
+        setUser(mappedUser)
+        localStorage.setItem(USER_KEY, JSON.stringify(mappedUser))
+
+        // Restore previously selected business
+        const storedBizId = localStorage.getItem(BUSINESS_KEY)
+        return loadBusinesses(storedBizId ?? undefined)
+      })
+      .catch(() => {
+        // Token invalid / expired and refresh failed
+        tokenStorage.clear()
+        localStorage.removeItem(USER_KEY)
+        localStorage.removeItem(BUSINESS_KEY)
+        setUser(null)
+        setAuthState('unauthenticated')
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Load businesses helper ────────────────────────────────────────────────
+
+  const loadBusinesses = useCallback(async (selectId?: string) => {
+    try {
+      const res = await api.get<BusinessesResponse>('/api/v1/businesses/')
+      const mapped = res.results.map(mapBusiness)
+      setBusinesses(mapped)
+
+      if (mapped.length === 0) {
+        setAuthState('needs-onboarding')
+        return
+      }
+
+      // Restore previously selected business if it still exists
+      if (selectId) {
+        const found = mapped.find(b => b.id === selectId)
+        if (found) setCurrentBusinessState(found)
+      }
+
+      setAuthState('authenticated')
+    } catch {
+      setAuthState('authenticated') // still authenticated, just no businesses
+    }
+  }, [])
+
+  // ── Handle auth callback (called from /businesses after URL tokens) ────────
+
+  const handleAuthCallback = useCallback(async (access: string, refresh: string) => {
+    tokenStorage.setTokens(access, refresh)
+    try {
+      const res = await api.get<MeResponse>('/api/v1/auth/me/')
+      const mappedUser = mapUser(res.data)
+      setUser(mappedUser)
+      localStorage.setItem(USER_KEY, JSON.stringify(mappedUser))
+      await loadBusinesses()
+    } catch {
+      tokenStorage.clear()
+      setAuthState('unauthenticated')
+      throw new Error('Failed to complete sign-in')
+    }
+  }, [loadBusinesses])
+
+  // ── Initiate Google sign-in ───────────────────────────────────────────────
+
+  const initiateGoogleSignIn = useCallback(() => {
+    // Full browser navigation — the backend handles the OAuth redirect chain
+    window.location.href = `${API_BASE}/api/v1/auth/google/?next=web`
+  }, [])
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
+
+  const signOut = useCallback(async () => {
+    const refresh = tokenStorage.getRefresh()
+    try {
+      if (refresh) {
+        await api.post('/api/v1/auth/signout/', { refresh })
+      }
+    } catch {
+      // Blacklisting may fail if token already expired — still clear locally
+    } finally {
+      tokenStorage.clear()
+      localStorage.removeItem(USER_KEY)
+      localStorage.removeItem(BUSINESS_KEY)
+      setUser(null)
+      setBusinesses([])
+      setCurrentBusinessState(null)
       setAuthState('unauthenticated')
     }
   }, [])
 
-  const signInWithGoogle = useCallback(async () => {
-    setAuthState('loading')
-    const { user: googleUser } = await authService.signInWithGoogle()
-    const newUser: User = {
-      id: googleUser.id,
-      googleId: googleUser.id,
-      name: googleUser.name,
-      email: googleUser.email,
-      avatar: googleUser.avatar,
-      createdAt: new Date().toISOString(),
-    }
-    setUser(newUser)
-    localStorage.setItem(SESSION_KEY, JSON.stringify(newUser))
-
-    const bizList = await businessService.getAll()
-    setBusinesses(bizList)
-
-    if (bizList.length === 0) {
-      setAuthState('needs-onboarding')
-    } else {
-      // Don't auto-select a business here — user picks from /businesses
-      // Clear any previously stored business so they always choose fresh
-      localStorage.removeItem(BUSINESS_KEY)
-      setCurrentBusinessState(null)
-      setAuthState('authenticated')
-    }
-  }, [])
-
-  const signOut = useCallback(() => {
-    setUser(null)
-    setBusinesses([])
-    setCurrentBusinessState(null)
-    setAuthState('unauthenticated')
-    localStorage.removeItem(SESSION_KEY)
-    localStorage.removeItem(BUSINESS_KEY)
-  }, [])
+  // ── Set current business ──────────────────────────────────────────────────
 
   const setCurrentBusiness = useCallback((biz: Business) => {
     setCurrentBusinessState(biz)
     localStorage.setItem(BUSINESS_KEY, biz.id)
   }, [])
 
+  // ── Refresh businesses list ───────────────────────────────────────────────
+
   const refreshBusinesses = useCallback(async () => {
-    const bizList = await businessService.getAll()
-    setBusinesses(bizList)
-    if (!currentBusiness) setCurrentBusinessState(bizList[0] ?? null)
-  }, [currentBusiness])
+    await loadBusinesses(currentBusiness?.id)
+  }, [loadBusinesses, currentBusiness?.id])
 
   return (
     <AuthContext.Provider
@@ -106,10 +291,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authState,
         businesses,
         currentBusiness,
-        signInWithGoogle,
+        initiateGoogleSignIn,
         signOut,
         setCurrentBusiness,
         refreshBusinesses,
+        handleAuthCallback,
       }}
     >
       {children}

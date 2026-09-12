@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, ArrowRight, TrendingUp, ShoppingBag, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Avatar } from '@/components/ui'
@@ -83,8 +83,34 @@ function AddBusinessCard({ onClick }: { onClick: () => void }) {
 }
 
 export default function MyBusinessesPage() {
-  const { user, businesses, setCurrentBusiness, signOut } = useAuth()
+  const { user, businesses, setCurrentBusiness, signOut, handleAuthCallback, authState } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [callbackLoading, setCallbackLoading] = useState(false)
+  const [callbackError, setCallbackError] = useState('')
+
+  // ── Handle tokens arriving from Google OAuth callback ──────────────────────
+  // Backend redirects to: /businesses?access=TOKEN&refresh=TOKEN
+  useEffect(() => {
+    const access = searchParams.get('access')
+    const refresh = searchParams.get('refresh')
+    const message = searchParams.get('message')
+
+    if (message) {
+      setCallbackError(message)
+      setSearchParams({}, { replace: true })
+      return
+    }
+
+    if (access && refresh) {
+      setCallbackLoading(true)
+      // Clean URL immediately so tokens aren't visible/bookmarkable
+      setSearchParams({}, { replace: true })
+      handleAuthCallback(access, refresh)
+        .catch(err => setCallbackError(err?.message ?? 'Sign-in failed'))
+        .finally(() => setCallbackLoading(false))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpen = (biz: Business) => {
     setCurrentBusiness(biz)
@@ -95,6 +121,23 @@ export default function MyBusinessesPage() {
 
   return (
     <div className="min-h-screen bg-ivory">
+      {/* Callback loading overlay */}
+      {callbackLoading && (
+        <div className="fixed inset-0 bg-ivory/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 rounded-[8px] bg-gold flex items-center justify-center font-serif font-bold text-ink">S</div>
+            <div className="w-5 h-5 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+            <p className="text-[13px] text-slate">Signing you in…</p>
+          </div>
+        </div>
+      )}
+
+      {/* Callback error banner */}
+      {callbackError && (
+        <div className="bg-red-light border-b border-red/20 px-6 py-3 text-center">
+          <p className="text-[13.5px] text-red font-medium">{callbackError}</p>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-20 bg-ivory/90 backdrop-blur-md border-b border-sand">
         <div className="max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between">
@@ -114,7 +157,7 @@ export default function MyBusinessesPage() {
               </div>
             </div>
             <button
-              onClick={() => { signOut(); navigate('/') }}
+              onClick={() => { signOut().then(() => navigate('/')) }}
               className="flex items-center gap-2 text-[13px] text-slate hover:text-ink px-3 py-1.5 rounded-[7px] hover:bg-sand transition-colors"
             >
               <LogOut size={14} />

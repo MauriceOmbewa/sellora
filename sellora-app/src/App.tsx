@@ -10,6 +10,7 @@ const LandingPage        = lazy(() => import('@/pages/marketing/LandingPage'))
 
 // Auth
 const LoginPage          = lazy(() => import('@/pages/auth/LoginPage'))
+const AuthCallbackPage   = lazy(() => import('@/pages/auth/AuthCallbackPage'))
 
 // Onboarding
 const OnboardingPage     = lazy(() => import('@/pages/onboarding/OnboardingPage'))
@@ -99,6 +100,15 @@ function AppRoutes() {
               <LoginPage />
             </AuthenticatedRedirect>
           }
+        />
+
+        {/* OAuth callback — backend redirects here after Google login */}
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+
+        {/* Auth error page */}
+        <Route
+          path="/auth/error"
+          element={<AuthCallbackPage />}
         />
 
         {/* Onboarding */}

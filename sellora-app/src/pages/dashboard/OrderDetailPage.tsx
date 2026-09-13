@@ -1,59 +1,59 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, MessageSquare, Check } from 'lucide-react'
-import { Badge, Button, PageHeader, useToast } from '@/components/ui'
-import { orderService } from '@/services'
+import { Phone, MessageSquare, Check } from 'lucide-react'
+import { Badge, Button, PageHeader, useToast, Skeleton } from '@/components/ui'
+import { orderService } from '@/services/remainingServices'
+import { useAuth } from '@/context/AuthContext'
 import type { Order, OrderStatus } from '@/types'
 
-const statusSteps: OrderStatus[] = ['new', 'confirmed', 'processing', 'ready', 'completed']
+const STATUS_STEPS: OrderStatus[] = ['new', 'confirmed', 'processing', 'ready', 'completed']
 const statusLabel: Record<OrderStatus, string> = {
   new: 'New', confirmed: 'Confirmed', processing: 'Processing',
   ready: 'Ready for pickup', completed: 'Completed', cancelled: 'Cancelled',
 }
-const statusVariant: Record<string, any> = {
-  new: 'info', confirmed: 'gold', processing: 'warning',
-  ready: 'success', completed: 'success', cancelled: 'danger',
+const statusVariant: Record<string, 'info'|'gold'|'warning'|'success'|'danger'> = {
+  new: 'info', confirmed: 'gold', processing: 'warning', ready: 'success', completed: 'success', cancelled: 'danger',
 }
-const payVariant: Record<string, any> = {
+const payVariant: Record<string, 'success'|'warning'|'danger'|'outline'> = {
   paid: 'success', pending: 'warning', failed: 'danger', refunded: 'outline',
 }
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { currentBusiness } = useAuth()
   const { toast } = useToast()
-  const [order, setOrder] = useState<Order | null>(null)
+  const [order, setOrder]     = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
-    if (!id) return
-    orderService.getById(id).then(o => { setOrder(o); setLoading(false) })
-  }, [id])
+    if (!id || !currentBusiness) return
+    orderService.getById(currentBusiness.id, id)
+      .then(setOrder)
+      .catch(() => { toast('error', 'Order not found'); navigate('/app/orders') })
+      .finally(() => setLoading(false))
+  }, [id, currentBusiness?.id]) // eslint-disable-line
 
-  const handleStatusChange = async (status: OrderStatus) => {
-    if (!order) return
+  const handleStatusChange = async (status: OrderStatus, note?: string) => {
+    if (!order || !currentBusiness) return
     setUpdating(true)
-    const updated = await orderService.updateStatus(order.id, status)
-    setOrder(updated)
-    toast('success', 'Order updated', `Status changed to ${statusLabel[status]}`)
-    setUpdating(false)
+    try {
+      const updated = await orderService.updateStatus(currentBusiness.id, order.id, status, note)
+      setOrder(updated)
+      toast('success', 'Order updated', `Status changed to ${statusLabel[status]}`)
+    } catch (err: unknown) {
+      toast('error', 'Update failed', err instanceof Error ? err.message : '')
+    } finally { setUpdating(false) }
   }
 
   if (loading || !order) {
-    return (
-      <div className="space-y-4 animate-pulse">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-sand rounded-[14px]" />)}
-      </div>
-    )
+    return <div className="space-y-4">{Array.from({length:4}).map((_,i) => <Skeleton key={i} height={96} className="rounded-[14px]" />)}</div>
   }
 
-  const currentStepIndex = statusSteps.indexOf(order.status as OrderStatus)
-  const isCancelled = order.status === 'cancelled'
-
-  const nextStatus = !isCancelled && currentStepIndex < statusSteps.length - 1
-    ? statusSteps[currentStepIndex + 1]
-    : null
+  const currentStepIdx = STATUS_STEPS.indexOf(order.status as OrderStatus)
+  const isCancelled    = order.status === 'cancelled'
+  const nextStatus     = !isCancelled && currentStepIdx < STATUS_STEPS.length - 1 ? STATUS_STEPS[currentStepIdx + 1] : null
 
   return (
     <div className="space-y-5 fade-in">
@@ -63,71 +63,50 @@ export default function OrderDetailPage() {
         actions={
           <div className="flex gap-2">
             {nextStatus && (
-              <Button
-                variant="primary"
-                loading={updating}
-                onClick={() => handleStatusChange(nextStatus)}
-              >
+              <Button variant="primary" loading={updating} onClick={() => handleStatusChange(nextStatus)}>
                 Mark as {statusLabel[nextStatus]}
               </Button>
             )}
             {!isCancelled && order.status !== 'completed' && (
-              <Button
-                variant="outline"
-                onClick={() => handleStatusChange('cancelled')}
-              >
-                Cancel Order
-              </Button>
+              <Button variant="outline" onClick={() => handleStatusChange('cancelled')}>Cancel Order</Button>
             )}
           </div>
         }
       />
 
       <div className="grid lg:grid-cols-3 gap-5">
-        {/* Main column */}
         <div className="lg:col-span-2 space-y-5">
           {/* Status timeline */}
           <div className="bg-white border border-sand rounded-[14px] p-5">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-serif text-[16px] font-medium text-ink">Order status</h3>
-              <Badge variant={statusVariant[order.status]}>{statusLabel[order.status as OrderStatus]}</Badge>
+              <Badge variant={statusVariant[order.status] ?? 'outline'}>{statusLabel[order.status as OrderStatus]}</Badge>
             </div>
 
             {!isCancelled ? (
               <div className="flex items-center gap-0">
-                {statusSteps.map((step, i) => {
-                  const done = i <= currentStepIndex
-                  const active = i === currentStepIndex
+                {STATUS_STEPS.map((step, i) => {
+                  const done = i <= currentStepIdx
+                  const active = i === currentStepIdx
                   return (
                     <React.Fragment key={step}>
                       <div className="flex flex-col items-center gap-1.5">
-                        <div className={[
-                          'w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors',
-                          done ? 'bg-ink text-ivory' : 'bg-sand text-slate',
-                        ].join(' ')}>
-                          {done ? <Check size={13} /> : i + 1}
+                        <div className={['w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold', done ? 'bg-ink text-ivory' : 'bg-sand text-slate'].join(' ')}>
+                          {done ? <Check size={13} /> : i+1}
                         </div>
-                        <span className={['text-[11px] text-center w-14', active ? 'font-semibold text-ink' : 'text-slate'].join(' ')}>
-                          {statusLabel[step]}
-                        </span>
+                        <span className={['text-[11px] text-center w-14', active ? 'font-semibold text-ink' : 'text-slate'].join(' ')}>{statusLabel[step]}</span>
                       </div>
-                      {i < statusSteps.length - 1 && (
-                        <div className={['flex-1 h-0.5 mb-4 transition-colors', i < currentStepIndex ? 'bg-ink' : 'bg-sand'].join(' ')} />
-                      )}
+                      {i < STATUS_STEPS.length-1 && <div className={['flex-1 h-0.5 mb-4', i < currentStepIdx ? 'bg-ink' : 'bg-sand'].join(' ')} />}
                     </React.Fragment>
                   )
                 })}
               </div>
             ) : (
               <div className="flex items-center gap-3 bg-red-light rounded-[10px] px-4 py-3">
-                <div className="w-8 h-8 rounded-full bg-red flex items-center justify-center">
-                  <span className="text-white text-[14px]">×</span>
-                </div>
+                <div className="w-8 h-8 rounded-full bg-red flex items-center justify-center text-white text-[14px] shrink-0">×</div>
                 <div>
                   <p className="text-[13.5px] font-semibold text-ink">Order Cancelled</p>
-                  <p className="text-[12px] text-slate mt-0.5">
-                    {order.timeline.find(t => t.status === 'cancelled')?.note ?? 'No reason provided'}
-                  </p>
+                  <p className="text-[12px] text-slate mt-0.5">{order.timeline.find(t => t.status === 'cancelled')?.note ?? 'No reason provided'}</p>
                 </div>
               </div>
             )}
@@ -138,11 +117,9 @@ export default function OrderDetailPage() {
                 <div key={i} className="flex items-start gap-3 text-[13px]">
                   <div className="w-1.5 h-1.5 bg-ink rounded-full mt-1.5 shrink-0" />
                   <div>
-                    <span className="font-semibold text-ink">{statusLabel[event.status as OrderStatus]}</span>
+                    <span className="font-semibold text-ink">{statusLabel[event.status as OrderStatus] ?? event.status}</span>
                     {event.note && <span className="text-slate"> · {event.note}</span>}
-                    <p className="text-[11.5px] text-slate mt-0.5">
-                      {new Date(event.timestamp).toLocaleString('en-KE')}
-                    </p>
+                    <p className="text-[11.5px] text-slate mt-0.5">{new Date(event.timestamp).toLocaleString('en-KE')}</p>
                   </div>
                 </div>
               ))}
@@ -152,10 +129,12 @@ export default function OrderDetailPage() {
           {/* Items */}
           <div className="bg-white border border-sand rounded-[14px] p-5">
             <h3 className="font-serif text-[16px] font-medium text-ink mb-4">Order items</h3>
-            <div className="space-y-0">
+            <div>
               {order.items.map(item => (
                 <div key={item.id} className="flex items-center gap-3 py-3.5 border-b border-sand last:border-0">
-                  <div className="w-11 h-11 bg-sand rounded-[8px] shrink-0" />
+                  <div className="w-11 h-11 bg-sand rounded-[8px] shrink-0 overflow-hidden">
+                    {item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13.5px] font-semibold text-ink">{item.productName}</p>
                     <p className="text-[12px] text-slate">{item.sku} · Qty {item.quantity}</p>
@@ -167,8 +146,6 @@ export default function OrderDetailPage() {
                 </div>
               ))}
             </div>
-
-            {/* Totals */}
             <div className="mt-4 pt-4 border-t border-sand space-y-2">
               {[
                 { label: 'Subtotal', value: `KSh ${order.subtotal.toLocaleString()}` },
@@ -181,8 +158,7 @@ export default function OrderDetailPage() {
                 </div>
               ))}
               <div className="flex justify-between text-[15px] font-bold text-ink pt-2 border-t border-sand">
-                <span>Total</span>
-                <span>KSh {order.total.toLocaleString()}</span>
+                <span>Total</span><span>KSh {order.total.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -190,28 +166,16 @@ export default function OrderDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-5">
-          {/* Customer */}
           <div className="bg-white border border-sand rounded-[14px] p-5">
             <h3 className="font-serif text-[16px] font-medium text-ink mb-4">Customer</h3>
             <p className="text-[14px] font-semibold text-ink">{order.customerName}</p>
             <div className="mt-3 space-y-2">
-              <a
-                href={`tel:${order.customerPhone}`}
-                className="flex items-center gap-2 text-[13px] text-slate hover:text-ink"
-              >
-                <Phone size={13} />
-                {order.customerPhone}
-              </a>
-              {order.customerEmail && (
-                <a href={`mailto:${order.customerEmail}`} className="flex items-center gap-2 text-[13px] text-slate hover:text-ink">
-                  <MessageSquare size={13} />
-                  {order.customerEmail}
-                </a>
-              )}
+              <a href={`tel:${order.customerPhone}`} className="flex items-center gap-2 text-[13px] text-slate hover:text-ink"><Phone size={13} />{order.customerPhone}</a>
+              {order.customerEmail && <a href={`mailto:${order.customerEmail}`} className="flex items-center gap-2 text-[13px] text-slate hover:text-ink"><MessageSquare size={13} />{order.customerEmail}</a>}
             </div>
             {order.deliveryAddress && (
               <div className="mt-3 pt-3 border-t border-sand">
-                <p className="text-[12px] font-semibold text-slate uppercase tracking-wide mb-1">Delivery address</p>
+                <p className="text-[12px] font-semibold text-slate uppercase tracking-wide mb-1">Delivery</p>
                 <p className="text-[13.5px] text-ink">{order.deliveryAddress}</p>
               </div>
             )}
@@ -223,7 +187,6 @@ export default function OrderDetailPage() {
             )}
           </div>
 
-          {/* Payment */}
           <div className="bg-white border border-sand rounded-[14px] p-5">
             <h3 className="font-serif text-[16px] font-medium text-ink mb-4">Payment</h3>
             <div className="space-y-3">

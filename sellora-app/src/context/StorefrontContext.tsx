@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { Business, Product, CartItem, Cart } from '@/types'
 import { businessService } from '@/services/businessService'
-// Products for the public storefront will be migrated to the storefront API in integration #10
-// For now, fall back to the mock product service
-import { productService } from '@/services'
+import { productService } from '@/services/productService'
 
 interface StorefrontContextType {
   business: Business | null

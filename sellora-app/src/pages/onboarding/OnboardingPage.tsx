@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ArrowRight, ArrowLeft, Upload, Globe } from 'lucide-react'
-import { Input, Textarea, Select, ColorPicker, Toggle, Button } from '@/components/ui'
-import { businessService } from '@/services'
+import { Input, Textarea, Select, ColorPicker, Button, useToast } from '@/components/ui'
+import { businessService } from '@/services/businessService'
 import { useAuth } from '@/context/AuthContext'
-import type { BusinessCategory, BusinessTheme } from '@/types'
+import type { BusinessCategory } from '@/types'
 
 const STEPS = ['Business basics', 'Brand identity', 'Contact & social', 'Preview & launch']
 
@@ -313,7 +313,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<FormData>(defaultForm)
   const [loading, setLoading] = useState(false)
-  const { user, refreshBusinesses } = useAuth()
+  const [error, setError] = useState('')
+  const { refreshBusinesses } = useAuth()
+  const { toast } = useToast()
   const navigate = useNavigate()
 
   const update = (key: keyof FormData, value: string) => {
@@ -322,8 +324,6 @@ export default function OnboardingPage() {
 
   const canNext = () => {
     if (step === 0) return form.name.trim().length > 0 && form.category !== ''
-    if (step === 1) return true
-    if (step === 2) return true
     return true
   }
 
@@ -337,51 +337,46 @@ export default function OnboardingPage() {
 
   const handleCreate = async () => {
     setLoading(true)
-    const slug = form.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-    const theme: BusinessTheme = {
-      primaryColor: form.primaryColor,
-      primaryHover: form.primaryColor,
-      accentColor: form.accentColor,
-      backgroundColor: '#FAF8F3',
-      textColor: '#171B21',
+    setError('')
+    try {
+      await businessService.create({
+        name: form.name,
+        category: form.category as BusinessCategory,
+        description: form.description || undefined,
+        motto: form.motto || undefined,
+        theme: {
+          primaryColor: form.primaryColor,
+          primaryHover: form.primaryColor,
+          accentColor: form.accentColor,
+          backgroundColor: '#FAF8F3',
+          textColor: '#171B21',
+        },
+        contact: {
+          phone: form.phone || undefined,
+          whatsapp: form.whatsapp || undefined,
+          email: form.email || undefined,
+          address: form.address || undefined,
+          city: form.city || undefined,
+          country: 'Kenya',
+          openingHours: 'Mon–Sat 9am–6pm',
+        },
+        hero: {
+          heading: `Welcome to ${form.name}`,
+          subheading: form.motto || form.description || undefined,
+          ctaText: 'Shop Now',
+          ctaSecondaryText: 'Explore Products',
+        },
+        about_text: form.description || undefined,
+      })
+
+      await refreshBusinesses()
+      toast('success', 'Business created!', `${form.name} is ready.`)
+      navigate('/app')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create business. Please try again.'
+      setError(msg)
+      setLoading(false)
     }
-
-    await businessService.create({
-      slug,
-      name: form.name,
-      category: form.category as BusinessCategory,
-      description: form.description,
-      motto: form.motto,
-      theme,
-      contact: {
-        phone: form.phone,
-        whatsapp: form.whatsapp,
-        email: form.email,
-        address: form.address,
-        city: form.city,
-        country: 'Kenya',
-        openingHours: 'Mon–Sat 9am–6pm',
-      },
-      socialLinks: {
-        instagram: form.instagram || undefined,
-        facebook: form.facebook || undefined,
-        tiktok: form.tiktok || undefined,
-      },
-      hero: {
-        heading: `Welcome to ${form.name}`,
-        subheading: form.motto || form.description,
-        ctaText: 'Shop Now',
-        ctaSecondaryText: 'Explore Products',
-      },
-      aboutText: form.description,
-      status: 'active',
-      plan: 'starter',
-      ownerId: user?.id ?? 'user-001',
-    })
-
-    await refreshBusinesses()
-    setLoading(false)
-    navigate('/app')
   }
 
   return (
@@ -448,6 +443,9 @@ export default function OnboardingPage() {
             </Button>
           )}
         </div>
+        {error && (
+          <p className="text-center text-[13px] text-red font-medium mt-3">{error}</p>
+        )}
       </div>
     </div>
   )

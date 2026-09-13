@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, ArrowRight, TrendingUp, ShoppingBag, LogOut } from 'lucide-react'
+import { Plus, ArrowRight, TrendingUp, ShoppingBag, LogOut, Trash2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { Avatar } from '@/components/ui'
+import { Avatar, ConfirmModal, useToast } from '@/components/ui'
 import { tokenStorage } from '@/services/api'
+import { businessService } from '@/services/businessService'
 import type { Business } from '@/types'
 
 const categoryLabels: Record<string, string> = {
@@ -84,11 +85,14 @@ function AddBusinessCard({ onClick }: { onClick: () => void }) {
 }
 
 export default function MyBusinessesPage() {
-  const { user, businesses, setCurrentBusiness, signOut, handleAuthCallback, authState } = useAuth()
+  const { user, businesses, setCurrentBusiness, signOut, handleAuthCallback, authState, refreshBusinesses } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [callbackLoading, setCallbackLoading] = useState(false)
   const [callbackError, setCallbackError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Business | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const { toast } = useToast()
 
   // ── Handle tokens arriving from Google OAuth callback ──────────────────────
   // Backend redirects to: /businesses?access=TOKEN&refresh=TOKEN
@@ -135,6 +139,21 @@ export default function MyBusinessesPage() {
   }
 
   const handleAdd = () => navigate('/onboarding')
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await businessService.delete(deleteTarget.id)
+      await refreshBusinesses()
+      toast('success', 'Business deleted', `${deleteTarget.name} has been removed.`)
+    } catch (err: unknown) {
+      toast('error', 'Delete failed', err instanceof Error ? err.message : 'Please try again.')
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
 
   // Show full-page loader while processing the OAuth callback or while auth
   // state is still resolving (avoids flash of unauthenticated content)
@@ -256,11 +275,32 @@ export default function MyBusinessesPage() {
         {/* Grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {businesses.map(biz => (
-            <BusinessCard key={biz.id} biz={biz} onOpen={() => handleOpen(biz)} />
+            <div key={biz.id} className="relative group">
+              <BusinessCard biz={biz} onOpen={() => handleOpen(biz)} />
+              <button
+                onClick={e => { e.stopPropagation(); setDeleteTarget(biz) }}
+                className="absolute top-3 right-3 p-1.5 bg-white border border-sand rounded-[7px] text-slate hover:text-red hover:border-red-light opacity-0 group-hover:opacity-100 transition-all"
+                title="Delete business"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
           ))}
           <AddBusinessCard onClick={handleAdd} />
         </div>
       </main>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete business?"
+        description={`"${deleteTarget?.name}" and all its data will be permanently deleted. This cannot be undone.`}
+        confirmText="Delete business"
+        cancelText="Keep it"
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   )
 }

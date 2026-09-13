@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { Business, Product, CartItem, Cart } from '@/types'
-import { businessService, productService } from '@/services'
+import { businessService } from '@/services/businessService'
+import { productService } from '@/services'
 
 interface StorefrontContextType {
   business: Business | null
@@ -38,7 +39,7 @@ export function StorefrontProvider({
       } else {
         setLoading(false)
       }
-    })
+    }).catch(() => setLoading(false))
   }, [businessSlug])
 
   // Apply brand CSS variables when business loads

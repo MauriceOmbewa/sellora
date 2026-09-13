@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { Business, Product, CartItem, Cart } from '@/types'
 import { businessService } from '@/services/businessService'
+// Products for the public storefront will be migrated to the storefront API in integration #10
+// For now, fall back to the mock product service
 import { productService } from '@/services'
 
 interface StorefrontContextType {
@@ -32,8 +34,8 @@ export function StorefrontProvider({
     businessService.getBySlug(businessSlug).then(biz => {
       setBusiness(biz)
       if (biz) {
-        productService.getAll(biz.id).then(prods => {
-          setProducts(prods.filter(p => p.isAvailable && p.status === 'active'))
+        productService.getAll(biz.id, { page_size: 100, status: 'active' }).then(result => {
+          setProducts(result.products.filter(p => p.isAvailable))
           setLoading(false)
         })
       } else {

@@ -8,58 +8,15 @@
 
 // ── Real backend services ─────────────────────────────────────────────────────
 export { businessService } from './businessService'
+export { productService, categoryService } from './productService'
 export { api, tokenStorage, ApiError } from './api'
 
-// ── Remaining mock services (will be replaced in integrations 3–13) ──────────
-export { mockProducts as productsMock } from '@/mock'
-
 import type {
-  Product, Category, Order, Customer,
-  InventoryItem, AnalyticsSummary, StorefrontSettings,
+  Order, Customer, InventoryItem, AnalyticsSummary, StorefrontSettings,
 } from '@/types'
-import {
-  mockProducts, mockCategories, mockOrders,
-  mockCustomers, mockAnalytics,
-} from '@/mock'
+import { mockOrders, mockCustomers, mockAnalytics, mockProducts } from '@/mock'
 
 const delay = (ms = 300) => new Promise(r => setTimeout(r, ms))
-
-export const productService = {
-  async getAll(_businessId: string): Promise<Product[]> { await delay(); return [...mockProducts] },
-  async getById(id: string): Promise<Product | null> { await delay(); return mockProducts.find(p => p.id === id) ?? null },
-  async getBySlug(slug: string): Promise<Product | null> { await delay(100); return mockProducts.find(p => p.slug === slug) ?? null },
-  async getFeatured(_businessId: string): Promise<Product[]> { await delay(); return mockProducts.filter(p => p.isFeatured && p.isAvailable) },
-  async create(data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'totalSold'>): Promise<Product> {
-    await delay()
-    const p: Product = { ...data, id: `prod-${Date.now()}`, totalSold: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-    mockProducts.push(p); return p
-  },
-  async update(id: string, data: Partial<Product>): Promise<Product> {
-    await delay()
-    const i = mockProducts.findIndex(p => p.id === id)
-    if (i === -1) throw new Error('Not found')
-    mockProducts[i] = { ...mockProducts[i], ...data, updatedAt: new Date().toISOString() }
-    return mockProducts[i]
-  },
-  async delete(id: string): Promise<void> { await delay(); const i = mockProducts.findIndex(p => p.id === id); if (i !== -1) mockProducts.splice(i, 1) },
-}
-
-export const categoryService = {
-  async getAll(_businessId: string): Promise<Category[]> { await delay(); return [...mockCategories] },
-  async create(data: Omit<Category, 'id' | 'createdAt' | 'productCount'>): Promise<Category> {
-    await delay()
-    const c: Category = { ...data, id: `cat-${Date.now()}`, productCount: 0, createdAt: new Date().toISOString() }
-    mockCategories.push(c); return c
-  },
-  async update(id: string, data: Partial<Category>): Promise<Category> {
-    await delay()
-    const i = mockCategories.findIndex(c => c.id === id)
-    if (i === -1) throw new Error('Not found')
-    mockCategories[i] = { ...mockCategories[i], ...data }
-    return mockCategories[i]
-  },
-  async delete(id: string): Promise<void> { await delay(); const i = mockCategories.findIndex(c => c.id === id); if (i !== -1) mockCategories.splice(i, 1) },
-}
 
 export const orderService = {
   async getAll(_businessId: string): Promise<Order[]> { await delay(); return [...mockOrders] },

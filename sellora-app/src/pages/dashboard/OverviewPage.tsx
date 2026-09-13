@@ -6,7 +6,8 @@ import {
 } from 'lucide-react'
 import { KpiCard, Badge, Avatar, BarChart, Sparkline } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
-import { analyticsService, orderService, productService } from '@/services'
+import { analyticsService, orderService } from '@/services'
+import { productService } from '@/services/productService'
 import type { AnalyticsSummary, Order, Product } from '@/types'
 import { mockWeeklyData } from '@/mock'
 
@@ -42,8 +43,9 @@ export default function OverviewPage() {
     Promise.all([
       analyticsService.getSummary(currentBusiness.id),
       orderService.getAll(currentBusiness.id),
-      productService.getAll(currentBusiness.id),
-    ]).then(([a, orders, products]) => {
+      productService.getAll(currentBusiness.id, { page_size: 100 }),
+    ]).then(([a, orders, productResult]) => {
+      const products = productResult.products
       setAnalytics(a)
       setRecentOrders(orders.slice(0, 5))
       setLowStock(products.filter(p => p.stockQuantity <= p.lowStockThreshold))

@@ -1,13 +1,26 @@
+/**
+ * StorefrontContext — drives the public customer-facing storefront.
+ *
+ * Uses the real public storefront API (/api/v1/store/:slug/*).
+ * No authentication required — all calls are public.
+ *
+ * Returns 404 from backend if:
+ *   - Business slug doesn't exist
+ *   - Business is inactive/suspended
+ *   - Storefront is not published (is_published = false)
+ */
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import type { Business, Product, CartItem, Cart } from '@/types'
-import { businessService } from '@/services/businessService'
-import { productService } from '@/services/productService'
+import type { Business, Product, Category, CartItem, Cart } from '@/types'
+import { storefrontService } from '@/services/storefrontService'
 
 interface StorefrontContextType {
   business: Business | null
   products: Product[]
+  categories: Category[]
   cart: Cart
   loading: boolean
+  notFound: boolean
   addToCart: (product: Product, qty: number) => void
   removeFromCart: (productId: string) => void
   updateQty: (productId: string, qty: number) => void
@@ -23,49 +36,66 @@ export function StorefrontProvider({
   children: React.ReactNode
   businessSlug: string
 }) {
-  const [business, setBusiness] = useState<Business | null>(null)
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [business, setBusiness]     = useState<Business | null>(null)
+  const [products, setProducts]     = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [notFound, setNotFound]     = useState(false)
+  const [cartItems, setCartItems]   = useState<CartItem[]>([])
 
   useEffect(() => {
-    businessService.getBySlug(businessSlug).then(biz => {
-      setBusiness(biz)
-      if (biz) {
-        productService.getAll(biz.id, { page_size: 100, status: 'active' }).then(result => {
-          setProducts(result.products.filter(p => p.isAvailable))
-          setLoading(false)
-        })
-      } else {
-        setLoading(false)
-      }
-    }).catch(() => setLoading(false))
+    if (!businessSlug) { setLoading(false); setNotFound(true); return }
+
+    setLoading(true)
+    setNotFound(false)
+
+    // Load business profile, products, and categories in parallel
+    Promise.all([
+      storefrontService.getStore(businessSlug),
+      storefrontService.getProducts(businessSlug, { page_size: 100 }),
+      storefrontService.getCategories(businessSlug),
+    ])
+      .then(([biz, { products }, cats]) => {
+        setBusiness(biz)
+        setProducts(products)
+        setCategories(cats)
+      })
+      .catch((err) => {
+        // 404 = unpublished or doesn't exist
+        if (err?.status === 404) setNotFound(true)
+        // Other errors: still show store shell with empty products
+      })
+      .finally(() => setLoading(false))
   }, [businessSlug])
 
   // Apply brand CSS variables when business loads
   useEffect(() => {
     if (!business) return
     const root = document.documentElement
-    root.style.setProperty('--brand-primary', business.theme.primaryColor)
-    root.style.setProperty('--brand-primary-hover', business.theme.primaryHover)
-    root.style.setProperty('--brand-accent', business.theme.accentColor)
-    root.style.setProperty('--brand-background', business.theme.backgroundColor)
-    root.style.setProperty('--brand-text', business.theme.textColor)
+    root.style.setProperty('--brand-primary',       business.theme.primaryColor)
+    root.style.setProperty('--brand-primary-hover', business.theme.primaryHover || business.theme.primaryColor)
+    root.style.setProperty('--brand-accent',        business.theme.accentColor)
+    root.style.setProperty('--brand-background',    business.theme.backgroundColor)
+    root.style.setProperty('--brand-text',          business.theme.textColor)
     return () => {
-      // Reset to defaults when leaving storefront
-      root.style.setProperty('--brand-primary', '#C79A3D')
+      // Reset when leaving the storefront
+      root.style.setProperty('--brand-primary',       '#C79A3D')
       root.style.setProperty('--brand-primary-hover', '#A67D28')
-      root.style.setProperty('--brand-accent', '#3F6B4F')
-      root.style.setProperty('--brand-background', '#FAF8F3')
-      root.style.setProperty('--brand-text', '#171B21')
+      root.style.setProperty('--brand-accent',        '#3F6B4F')
+      root.style.setProperty('--brand-background',    '#FAF8F3')
+      root.style.setProperty('--brand-text',          '#171B21')
     }
-  }, [business])
+  }, [business?.id])
+
+  // ── Cart operations ───────────────────────────────────────────────────────
 
   const addToCart = useCallback((product: Product, qty: number) => {
     setCartItems(prev => {
       const existing = prev.find(i => i.productId === product.id)
       if (existing) {
-        return prev.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + qty } : i)
+        return prev.map(i =>
+          i.productId === product.id ? { ...i, quantity: i.quantity + qty } : i
+        )
       }
       return [...prev, { productId: product.id, product, quantity: qty }]
     })
@@ -79,24 +109,31 @@ export function StorefrontProvider({
     if (qty <= 0) {
       setCartItems(prev => prev.filter(i => i.productId !== productId))
     } else {
-      setCartItems(prev => prev.map(i => i.productId === productId ? { ...i, quantity: qty } : i))
+      setCartItems(prev => prev.map(i =>
+        i.productId === productId ? { ...i, quantity: qty } : i
+      ))
     }
   }, [])
 
   const clearCart = useCallback(() => setCartItems([]), [])
 
-  const subtotal = cartItems.reduce((s, i) => s + i.product.sellingPrice * i.quantity, 0)
-  const deliveryFee = subtotal > 0 ? 300 : 0
-  const cart: Cart = {
-    businessId: business?.id ?? '',
-    items: cartItems,
+  // ── Cart totals ───────────────────────────────────────────────────────────
+
+  const subtotal     = cartItems.reduce((s, i) => s + i.product.sellingPrice * i.quantity, 0)
+  const deliveryFee  = subtotal > 0 ? 300 : 0
+  const cart: Cart   = {
+    businessId:  business?.id ?? '',
+    items:       cartItems,
     subtotal,
     deliveryFee,
-    total: subtotal + deliveryFee,
+    total:       subtotal + deliveryFee,
   }
 
   return (
-    <StorefrontContext.Provider value={{ business, products, cart, loading, addToCart, removeFromCart, updateQty, clearCart }}>
+    <StorefrontContext.Provider value={{
+      business, products, categories, cart, loading, notFound,
+      addToCart, removeFromCart, updateQty, clearCart,
+    }}>
       {children}
     </StorefrontContext.Provider>
   )

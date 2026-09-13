@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { X, Upload } from 'lucide-react'
+import { X, Upload, Loader2 } from 'lucide-react'
 import { Button, Input, Textarea, Select, Toggle, PageHeader, useToast, Skeleton } from '@/components/ui'
 import { productService, categoryService } from '@/services/productService'
+import { uploadService } from '@/services/uploadService'
 import { useAuth } from '@/context/AuthContext'
 import type { Product, Category } from '@/types'
 
@@ -42,11 +43,31 @@ export default function ProductDetailPage() {
   const { currentBusiness } = useAuth()
   const { toast } = useToast()
 
-  const [loading, setLoading]     = useState(!isNew)
-  const [saving, setSaving]       = useState(false)
+  const [loading, setLoading]       = useState(!isNew)
+  const [saving, setSaving]         = useState(false)
+  const [uploading, setUploading]   = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
-  const [form, setForm]           = useState<FormState>(blankForm)
-  const [tagInput, setTagInput]   = useState('')
+  const [form, setForm]             = useState<FormState>(blankForm)
+  const [tagInput, setTagInput]     = useState('')
+  const fileInputRef                = useRef<HTMLInputElement>(null)
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const err = uploadService.validate(file)
+    if (err) { toast('error', 'Invalid file', err); return }
+    setUploading(true)
+    try {
+      const url = await uploadService.uploadImage(file, 'products')
+      set('images', [...form.images, url])
+      toast('success', 'Image uploaded')
+    } catch (uploadErr: unknown) {
+      toast('error', 'Upload failed', uploadErr instanceof Error ? uploadErr.message : '')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   useEffect(() => {
     if (!currentBusiness) return
@@ -239,12 +260,23 @@ export default function ProductDetailPage() {
                   </button>
                 </div>
               ))}
-              <button className="aspect-square rounded-[10px] border-2 border-dashed border-sand flex flex-col items-center justify-center gap-1 hover:border-ink/30 transition-colors text-slate">
-                <Upload size={16} />
-                <span className="text-[11px]">Add image</span>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="aspect-square rounded-[10px] border-2 border-dashed border-sand flex flex-col items-center justify-center gap-1 hover:border-ink/30 transition-colors text-slate disabled:opacity-50"
+              >
+                {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                <span className="text-[11px]">{uploading ? 'Uploading…' : 'Add image'}</span>
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
             </div>
-            <p className="text-[12px] text-slate">Image upload will be available in a future update. Paste image URLs directly via the API for now.</p>
+            <p className="text-[12px] text-slate">Accepted: JPEG, PNG, WebP, GIF. Max 10MB per image.</p>
           </div>
         </div>
 

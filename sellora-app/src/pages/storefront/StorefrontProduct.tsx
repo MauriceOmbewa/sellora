@@ -1,9 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ShoppingBag, MessageCircle, Minus, Plus, ArrowLeft, Package, Truck, Shield } from 'lucide-react'
+import { ShoppingBag, MessageCircle, Minus, Plus, Package, Truck, Shield } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
 import { ProductCard } from '@/components/storefront/ProductCard'
-import { useToast } from '@/components/ui'
+import { useToast, Skeleton } from '@/components/ui'
+import { storefrontService } from '@/services/storefrontService'
+import type { Product } from '@/types'
 
 export default function StorefrontProduct() {
   const { businessSlug, productSlug } = useParams<{ businessSlug: string; productSlug: string }>()
@@ -11,11 +13,43 @@ export default function StorefrontProduct() {
   const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
-  const product = products.find(p => p.slug === productSlug)
+  const [product, setProduct]       = useState<Product | null>(null)
+  const [loading, setLoading]       = useState(true)
   const [selectedImage, setSelectedImage] = useState(0)
-  const [qty, setQty] = useState(1)
+  const [qty, setQty]               = useState(1)
+
+  // Fetch the product from the API using the slug
+  useEffect(() => {
+    if (!businessSlug || !productSlug) return
+    setLoading(true)
+    // First check context products (already loaded), fall back to API call
+    const cached = products.find(p => p.slug === productSlug)
+    if (cached) {
+      setProduct(cached)
+      setLoading(false)
+    } else {
+      storefrontService.getProduct(businessSlug, productSlug)
+        .then(p => { setProduct(p); setLoading(false) })
+        .catch(() => setLoading(false))
+    }
+  }, [businessSlug, productSlug, products]) // eslint-disable-line
 
   const related = products.filter(p => p.id !== product?.id && p.categoryId === product?.categoryId).slice(0, 4)
+
+  if (loading) {
+    return (
+      <div className="max-w-[1200px] mx-auto px-5 lg:px-8 py-8">
+        <div className="grid lg:grid-cols-2 gap-10">
+          <Skeleton className="aspect-square rounded-[16px]" />
+          <div className="space-y-4">
+            <Skeleton height={48} className="w-3/4 rounded-[10px]" />
+            <Skeleton height={36} className="w-1/3 rounded-[10px]" />
+            <Skeleton height={96} className="rounded-[10px]" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!product) {
     return (

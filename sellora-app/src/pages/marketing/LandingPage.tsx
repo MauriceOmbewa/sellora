@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight, Package, ShoppingBag, Users, BarChart2,
   Globe, MessageSquare, Zap, Check, ChevronDown, ChevronUp,
   Store, TrendingUp, Archive, Palette, Star, ArrowUpRight,
 } from 'lucide-react'
+import { plansService } from '@/services/plansService'
+import type { PricingPlan } from '@/types'
 
 // ── Hero dashboard mockup ─────────────────────────────────────────────────────
 function DashboardMockup() {
@@ -154,6 +156,23 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function LandingPage() {
+  // Fetch live pricing plans from the backend
+  const [plans, setPlans]       = useState<PricingPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(true)
+
+  useEffect(() => {
+    plansService.getAll()
+      .then(setPlans)
+      .catch(() => {
+        // Fallback static plans if backend is unreachable
+        setPlans([
+          { id: 'starter',  name: 'Starter',  monthlyPrice: 0,    annualPrice: 0,     description: 'Perfect for new businesses.', features: ['1 storefront','50 products','Order management','Basic analytics'], highlighted: false, ctaText: 'Get started free' },
+          { id: 'business', name: 'Business', monthlyPrice: 3499, annualPrice: 34990, description: 'For growing businesses.', features: ['Unlimited products','Advanced analytics','Custom domain','Priority support','Inventory management'], highlighted: true, ctaText: 'Start Business plan' },
+          { id: 'growth',   name: 'Growth',   monthlyPrice: 7999, annualPrice: 79990, description: 'For businesses scaling fast.', features: ['Multiple storefronts','Everything in Business','API access','Team accounts'], highlighted: false, ctaText: 'Start Growth plan' },
+        ])
+      })
+      .finally(() => setPlansLoading(false))
+  }, [])
   const businessTypes = [
     { icon: '🌸', label: 'Perfumes' },
     { icon: '✨', label: 'Cosmetics' },
@@ -231,38 +250,7 @@ export default function LandingPage() {
     { name: 'Urban Store', tagline: 'Dress the way you want to be seen.', primaryColor: '#171B21', products: ['Ankara Dress', 'Silk Blouse', 'Linen Set'] },
   ]
 
-  const plans = [
-    {
-      id: 'starter',
-      name: 'Starter',
-      price: 'KSh 1,499',
-      period: '/month',
-      desc: 'Perfect for getting your first business online.',
-      features: ['1 business', '100 products', 'Online storefront', 'Order management', 'Basic analytics', 'WhatsApp orders'],
-      highlighted: false,
-      cta: 'Start free trial',
-    },
-    {
-      id: 'business',
-      name: 'Business',
-      price: 'KSh 3,499',
-      period: '/month',
-      desc: 'For growing businesses that need more power.',
-      features: ['3 businesses', 'Unlimited products', 'Everything in Starter', 'Advanced analytics', 'Customer management', 'Inventory alerts', 'Priority support'],
-      highlighted: true,
-      cta: 'Start free trial',
-    },
-    {
-      id: 'growth',
-      name: 'Growth',
-      price: 'KSh 7,999',
-      period: '/month',
-      desc: 'For established businesses scaling fast.',
-      features: ['Unlimited businesses', 'Unlimited products', 'Everything in Business', 'Custom domain', 'Team members', 'API access', 'Dedicated support'],
-      highlighted: false,
-      cta: 'Contact us',
-    },
-  ]
+  // plans are loaded from the API above
 
   const faqs = [
     { q: 'Do I need technical knowledge?', a: 'Not at all. Sellora is designed for business owners, not developers. If you can use a smartphone, you can manage your entire business on Sellora.' },
@@ -497,51 +485,68 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-5 items-start">
-            {plans.map(plan => (
-              <div
-                key={plan.id}
-                className={[
-                  'rounded-[18px] p-8 relative',
-                  plan.highlighted
-                    ? 'bg-ink text-ivory border-2 border-ink shadow-xl scale-[1.02]'
-                    : 'bg-white border border-sand',
-                ].join(' ')}
-              >
-                {plan.highlighted && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-gold text-ink text-[11px] font-bold rounded-full">
-                    Most popular
-                  </div>
-                )}
-                <p className={['text-[13px] font-semibold uppercase tracking-widest mb-2', plan.highlighted ? 'text-gold' : 'text-slate'].join(' ')}>
-                  {plan.name}
-                </p>
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="font-serif text-[32px] font-semibold">{plan.price}</span>
-                  <span className={['text-[13px]', plan.highlighted ? 'text-ivory/60' : 'text-slate'].join(' ')}>{plan.period}</span>
+            {plansLoading ? (
+              // Skeleton placeholders while plans load
+              [1, 2, 3].map(i => (
+                <div key={i} className="rounded-[18px] border border-sand bg-white p-8 space-y-4">
+                  <div className="h-4 bg-sand rounded w-1/3" />
+                  <div className="h-8 bg-sand rounded w-1/2" />
+                  <div className="h-4 bg-sand rounded w-3/4" />
+                  {[1,2,3,4].map(j => <div key={j} className="h-4 bg-sand rounded" />)}
+                  <div className="h-10 bg-sand rounded-[9px]" />
                 </div>
-                <p className={['text-[13.5px] mb-6', plan.highlighted ? 'text-ivory/70' : 'text-slate'].join(' ')}>{plan.desc}</p>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-center gap-2.5 text-[14px]">
-                      <Check size={14} className={plan.highlighted ? 'text-gold shrink-0' : 'text-green shrink-0'} />
-                      <span className={plan.highlighted ? 'text-ivory/85' : 'text-ink-soft'}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/login"
+              ))
+            ) : (
+              plans.map(plan => (
+                <div
+                  key={plan.id}
                   className={[
-                    'flex items-center justify-center gap-2 w-full py-3 rounded-[9px] text-[14px] font-semibold transition-colors',
+                    'rounded-[18px] p-8 relative',
                     plan.highlighted
-                      ? 'bg-gold text-ink hover:bg-gold-deep'
-                      : 'bg-ink text-ivory hover:bg-ink-soft',
+                      ? 'bg-ink text-ivory border-2 border-ink shadow-xl scale-[1.02]'
+                      : 'bg-white border border-sand',
                   ].join(' ')}
                 >
-                  {plan.cta}
-                  <ArrowRight size={14} />
-                </Link>
-              </div>
-            ))}
+                  {plan.highlighted && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-gold text-ink text-[11px] font-bold rounded-full">
+                      Most popular
+                    </div>
+                  )}
+                  <p className={['text-[13px] font-semibold uppercase tracking-widest mb-2', plan.highlighted ? 'text-gold' : 'text-slate'].join(' ')}>
+                    {plan.name}
+                  </p>
+                  <div className="flex items-baseline gap-1 mb-2">
+                    <span className="font-serif text-[32px] font-semibold">
+                      {plan.monthlyPrice === 0 ? 'Free' : `KSh ${plan.monthlyPrice.toLocaleString()}`}
+                    </span>
+                    {plan.monthlyPrice > 0 && (
+                      <span className={['text-[13px]', plan.highlighted ? 'text-ivory/60' : 'text-slate'].join(' ')}>/month</span>
+                    )}
+                  </div>
+                  <p className={['text-[13.5px] mb-6', plan.highlighted ? 'text-ivory/70' : 'text-slate'].join(' ')}>{plan.description}</p>
+                  <ul className="space-y-3 mb-8">
+                    {plan.features.map(f => (
+                      <li key={f} className="flex items-center gap-2.5 text-[14px]">
+                        <Check size={14} className={plan.highlighted ? 'text-gold shrink-0' : 'text-green shrink-0'} />
+                        <span className={plan.highlighted ? 'text-ivory/85' : 'text-ink-soft'}>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    to="/login"
+                    className={[
+                      'flex items-center justify-center gap-2 w-full py-3 rounded-[9px] text-[14px] font-semibold transition-colors',
+                      plan.highlighted
+                        ? 'bg-gold text-ink hover:bg-gold-deep'
+                        : 'bg-ink text-ivory hover:bg-ink-soft',
+                    ].join(' ')}
+                  >
+                    {plan.ctaText}
+                    <ArrowRight size={14} />
+                  </Link>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

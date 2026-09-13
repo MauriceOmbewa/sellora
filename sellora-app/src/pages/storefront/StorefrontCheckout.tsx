@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { MessageCircle, CreditCard, Banknote, ArrowLeft } from 'lucide-react'
+import { CreditCard, Banknote, ArrowLeft, MessageCircle } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
-import { Input, Textarea } from '@/components/ui'
+import { Input, Textarea, useToast } from '@/components/ui'
+import { storefrontService } from '@/services/storefrontService'
 
 type PaymentMethod = 'mpesa' | 'cash' | 'whatsapp'
 
@@ -10,24 +11,20 @@ export default function StorefrontCheckout() {
   const { businessSlug } = useParams<{ businessSlug: string }>()
   const { cart, business, clearCart } = useStorefront()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
   const base = `/store/${businessSlug}`
 
-  const [form, setForm] = useState({
-    name: '', phone: '', email: '', address: '', notes: '',
-  })
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
   const [payment, setPayment] = useState<PaymentMethod>('mpesa')
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
 
-  const set = (k: keyof typeof form, v: string) => {
-    setForm(p => ({ ...p, [k]: v }))
-    setErrors(p => ({ ...p, [k]: '' }))
-  }
+  const set = (k: keyof typeof form, v: string) => { setForm(p => ({...p, [k]: v})); setErrors(p => ({...p, [k]: ''})) }
 
   const validate = () => {
     const e: Partial<typeof form> = {}
-    if (!form.name.trim()) e.name = 'Full name is required'
+    if (!form.name.trim())  e.name  = 'Full name is required'
     if (!form.phone.trim()) e.phone = 'Phone number is required'
     return e
   }
@@ -36,15 +33,31 @@ export default function StorefrontCheckout() {
     const e = validate()
     if (Object.keys(e).length > 0) { setErrors(e); return }
     setSubmitting(true)
-    await new Promise(r => setTimeout(r, 1000))
-    clearCart()
-    navigate(`${base}/success?order=${Date.now().toString().slice(-6)}`)
+    try {
+      const confirmation = await storefrontService.placeOrder(businessSlug!, {
+        customer_name:    form.name,
+        customer_phone:   form.phone,
+        customer_email:   form.email || undefined,
+        delivery_address: form.address || undefined,
+        order_notes:      form.notes || undefined,
+        payment_method:   payment === 'whatsapp' ? 'cash' : payment,
+        items: cart.items.map(i => ({
+          product_id: i.productId,
+          quantity:   i.quantity,
+        })),
+      })
+      clearCart()
+      navigate(`${base}/success?order=${confirmation.order_number}`)
+    } catch (err: unknown) {
+      toast('error', 'Order failed', err instanceof Error ? err.message : 'Please try again.')
+      setSubmitting(false)
+    }
   }
 
   const paymentOptions: { id: PaymentMethod; icon: React.ReactNode; label: string; desc: string }[] = [
-    { id: 'mpesa', icon: <CreditCard size={18} />, label: 'M-PESA', desc: 'Pay via M-PESA Paybill or Till' },
-    { id: 'cash', icon: <Banknote size={18} />, label: 'Cash / Pay on Delivery', desc: 'Pay when you receive your order' },
-    { id: 'whatsapp', icon: <MessageCircle size={18} />, label: 'Order via WhatsApp', desc: 'Confirm and pay through WhatsApp' },
+    { id: 'mpesa',    icon: <CreditCard size={18} />,   label: 'M-PESA',                desc: 'Pay via M-PESA Paybill or Till' },
+    { id: 'cash',     icon: <Banknote size={18} />,     label: 'Cash / Pay on Delivery', desc: 'Pay when you receive your order' },
+    { id: 'whatsapp', icon: <MessageCircle size={18} />, label: 'Order via WhatsApp',    desc: 'Confirm and pay through WhatsApp' },
   ]
 
   if (cart.items.length === 0) {

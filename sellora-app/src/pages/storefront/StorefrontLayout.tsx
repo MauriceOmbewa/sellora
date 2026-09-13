@@ -226,7 +226,7 @@ function StorefrontFooter() {
 }
 
 function StorefrontContent() {
-  const { loading, business } = useStorefront()
+  const { loading, business, notFound } = useStorefront()
 
   if (loading) {
     return (
@@ -239,12 +239,12 @@ function StorefrontContent() {
     )
   }
 
-  if (!business) {
+  if (notFound || !business) {
     return (
       <div className="min-h-screen flex items-center justify-center text-center px-6">
         <div>
           <p className="font-serif text-[28px] text-ink mb-3">Store not found</p>
-          <p className="text-slate">This store doesn't exist or may have been moved.</p>
+          <p className="text-slate">This store doesn't exist, hasn't been published yet, or may have moved.</p>
           <Link to="/" className="mt-6 inline-block text-ink font-semibold hover:underline">← Back to Sellora</Link>
         </div>
       </div>

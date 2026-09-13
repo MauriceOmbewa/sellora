@@ -1,18 +1,45 @@
 import React, { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { Phone, Mail, MapPin, Clock, MessageCircle, Share2, Send } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
-import { Input, Textarea } from '@/components/ui'
+import { Input, Textarea, useToast } from '@/components/ui'
+import { storefrontService } from '@/services/storefrontService'
 
 export default function StorefrontContact() {
+  const { businessSlug } = useParams<{ businessSlug: string }>()
   const { business } = useStorefront()
+  const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
   const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' })
   const [sent, setSent] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [errors, setErrors] = useState<{ phone?: string; email?: string; name?: string; message?: string }>({})
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await new Promise(r => setTimeout(r, 600))
-    setSent(true)
+    const errs: typeof errors = {}
+    if (!form.name.trim())    errs.name    = 'Name is required'
+    if (!form.message.trim()) errs.message = 'Message is required'
+    if (!form.phone.trim() && !form.email.trim()) {
+      errs.phone = 'Provide a phone number or email'
+    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+
+    setSubmitting(true)
+    try {
+      await storefrontService.sendMessage(businessSlug!, {
+        sender_name:  form.name,
+        sender_phone: form.phone || undefined,
+        sender_email: form.email || undefined,
+        body:         form.message,
+        channel:      'contact_form',
+      })
+      setSent(true)
+    } catch (err: unknown) {
+      toast('error', 'Message failed', err instanceof Error ? err.message : 'Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -135,18 +162,22 @@ export default function StorefrontContact() {
               <>
                 <h2 className="font-serif text-[22px] text-ink mb-5">Send us a message</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <Input label="Your name" placeholder="Fatuma Ndungu" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
+                  <Input label="Your name" placeholder="Fatuma Ndungu" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} error={errors.name} required />
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Input label="Phone" placeholder="+254 712 345 678" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                    <Input label="Phone" placeholder="+254 712 345 678" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} error={errors.phone} helpText="At least one contact required." />
                     <Input label="Email (optional)" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
                   </div>
-                  <Textarea label="Message" placeholder="What can we help you with?" value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} rows={5} required />
+                  <Textarea label="Message" placeholder="What can we help you with?" value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} rows={5} error={errors.message} required />
                   <button
                     type="submit"
-                    className="w-full py-3.5 text-white font-semibold text-[15px] rounded-[10px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                    disabled={submitting}
+                    className="w-full py-3.5 text-white font-semibold text-[15px] rounded-[10px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60"
                     style={{ background: primary }}
                   >
-                    <Send size={16} /> Send Message
+                    {submitting
+                      ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      : <><Send size={16} /> Send Message</>
+                    }
                   </button>
                 </form>
               </>

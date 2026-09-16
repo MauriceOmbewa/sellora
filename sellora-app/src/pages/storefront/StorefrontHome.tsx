@@ -1,14 +1,17 @@
 import React from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { ArrowRight, MessageCircle, Star, ShieldCheck, Truck, RefreshCw } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
 import { ProductCard } from '@/components/storefront/ProductCard'
 
 export default function StorefrontHome() {
-    const { business, products, loading, basePath } = useStorefront()
+  const { business, products, loading, basePath } = useStorefront()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
-  const featured = products.filter(p => p.isFeatured).slice(0, 4)
+  // Show featured products; if none are marked featured, show ALL products (fallback)
+  const featured   = products.filter(p => p.isFeatured).slice(0, 4)
+  const showAll    = featured.length === 0   // no featured products set yet
+
   const bestSellers = [...products].sort((a, b) => b.totalSold - a.totalSold).slice(0, 4)
   const newArrivals = [...products]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -102,21 +105,27 @@ export default function StorefrontHome() {
         </div>
       </section>
 
-      {/* ── FEATURED PRODUCTS ─────────────────────────── */}
-      {featured.length > 0 && (
+      {/* ── FEATURED / ALL PRODUCTS ─────────────────── */}
+      {products.length > 0 && (
         <section className="py-16">
           <div className="max-w-[1200px] mx-auto px-5 lg:px-8">
             <div className="flex items-end justify-between mb-8">
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>Curated for you</p>
-                <h2 className="font-serif text-[32px] text-ink">Featured Products</h2>
+                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>
+                  {showAll ? 'Our collection' : 'Curated for you'}
+                </p>
+                <h2 className="font-serif text-[32px] text-ink">
+                  {showAll ? 'All Products' : 'Featured Products'}
+                </h2>
               </div>
               <Link to={`${basePath}/shop`} className="hidden sm:flex items-center gap-1.5 text-[14px] font-semibold text-ink hover:opacity-70 transition-opacity">
                 View all <ArrowRight size={14} />
               </Link>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {featured.map(p => <ProductCard key={p.id} product={p} />)}
+              {(showAll ? products.slice(0, 8) : featured).map(p => (
+                <ProductCard key={p.id} product={p} />
+              ))}
             </div>
           </div>
         </section>

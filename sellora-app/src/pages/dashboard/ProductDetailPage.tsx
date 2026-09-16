@@ -8,9 +8,9 @@ import { useAuth } from '@/context/AuthContext'
 import type { Product, Category } from '@/types'
 
 const statusOptions  = [
-  { value: 'active',   label: 'Active' },
-  { value: 'draft',    label: 'Draft' },
-  { value: 'archived', label: 'Archived' },
+  { value: 'active',   label: 'Active — visible in storefront' },
+  { value: 'draft',    label: 'Draft — hidden from storefront' },
+  { value: 'archived', label: 'Archived — hidden from storefront' },
 ]
 const badgeOptions = [
   { value: '',           label: 'No badge' },
@@ -32,7 +32,7 @@ const blankForm: FormState = {
   name: '', description: '', category_id: '',
   selling_price: '', cost_price: '', sale_price: '',
   sku: '', stock_quantity: '0', low_stock_threshold: '5',
-  status: 'draft', is_available: true, is_featured: false,
+  status: 'active', is_available: true, is_featured: false,  // active by default so products appear in storefront immediately
   badge: '', tags: [], images: [],
 }
 
@@ -286,6 +286,11 @@ export default function ProductDetailPage() {
           <div className="bg-white border border-sand rounded-[14px] p-5 space-y-4">
             <h3 className="font-serif text-[16px] font-medium text-ink">Status & visibility</h3>
             <Select label="Status" options={statusOptions} value={form.status} onChange={e => set('status', e.target.value)} />
+            {form.status !== 'active' && (
+              <div className="bg-gold-light border border-gold/30 rounded-[10px] px-3 py-2.5 text-[12.5px] text-ink-soft">
+                ⚠️ This product is <strong>{form.status}</strong> and will not appear in your storefront. Set status to <strong>Active</strong> to make it visible.
+              </div>
+            )}
             <Select label="Badge" options={badgeOptions} value={form.badge} onChange={e => set('badge', e.target.value)} />
             <Toggle checked={form.is_available} onChange={v => set('is_available', v)} label="Available for purchase" helpText="Toggle off to hide from store." />
             <Toggle checked={form.is_featured} onChange={v => set('is_featured', v)} label="Featured product" helpText="Show on homepage featured section." />

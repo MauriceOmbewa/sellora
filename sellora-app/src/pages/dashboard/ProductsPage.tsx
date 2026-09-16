@@ -82,6 +82,9 @@ export default function ProductsPage() {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
+  // Count hidden products (draft or archived) in current view
+  const hiddenCount = products.filter(p => p.status !== 'active' || !p.isAvailable).length
+
   return (
     <div className="space-y-5 fade-in">
       <PageHeader
@@ -94,6 +97,20 @@ export default function ProductsPage() {
         }
       />
 
+      {/* Warn about hidden products so owners know why storefront looks empty */}
+      {!loading && hiddenCount > 0 && !statusFilter && (
+        <div className="bg-gold-light border border-gold/30 rounded-[12px] px-4 py-3 flex items-start gap-3">
+          <span className="text-[15px] shrink-0">⚠️</span>
+          <p className="text-[13.5px] text-ink-soft">
+            <strong>{hiddenCount} product{hiddenCount !== 1 ? 's are' : ' is'} hidden</strong> from your storefront
+            (status is Draft or Archived, or "Available" is off).
+            {' '}<button onClick={() => navigate('/app/products/' + products.find(p => p.status !== 'active')?.id)}
+              className="text-gold-deep font-semibold hover:underline">
+              Fix now →
+            </button>
+          </p>
+        </div>
+      )}
       {/* Filters */}
       <div className="bg-white border border-sand rounded-[14px] p-4">
         <div className="flex flex-wrap gap-3 items-center">

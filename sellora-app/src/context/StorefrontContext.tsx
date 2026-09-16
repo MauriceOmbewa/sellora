@@ -56,21 +56,37 @@ export function StorefrontProvider({
     setLoading(true)
     setNotFound(false)
 
-    // Load business profile, products, and categories in parallel
-    Promise.all([
+    // Load business profile, products, and categories in parallel.
+    // Use allSettled so a failure in one (e.g. empty categories) doesn't
+    // hide the others.
+    Promise.allSettled([
       storefrontService.getStore(businessSlug),
       storefrontService.getProducts(businessSlug, { page_size: 100 }),
       storefrontService.getCategories(businessSlug),
     ])
-      .then(([biz, { products }, cats]) => {
+      .then(([bizResult, productsResult, catsResult]) => {
+        // Business is mandatory — if it fails, show not found
+        if (bizResult.status === 'rejected') {
+          const err = bizResult.reason
+          console.error('[StorefrontContext] Failed to load store:', err?.message ?? err)
+          if (err?.status === 404) setNotFound(true)
+          return
+        }
+
+        const biz = bizResult.value
         setBusiness(biz)
-        setProducts(products)
-        setCategories(cats)
-      })
-      .catch((err) => {
-        // 404 = unpublished or doesn't exist
-        if (err?.status === 404) setNotFound(true)
-        // Other errors: still show store shell with empty products
+
+        if (productsResult.status === 'fulfilled') {
+          const { products, count } = productsResult.value
+          console.debug(`[Storefront] Loaded ${count} products for "${biz.name}"`)
+          setProducts(products)
+        } else {
+          console.error('[StorefrontContext] Products failed:', productsResult.reason?.message)
+        }
+
+        if (catsResult.status === 'fulfilled') {
+          setCategories(catsResult.value)
+        }
       })
       .finally(() => setLoading(false))
   }, [businessSlug])

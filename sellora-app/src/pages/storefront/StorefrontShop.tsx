@@ -45,14 +45,15 @@ export default function StorefrontShop() {
       page:        pg,
       page_size:   PAGE_SIZE,
     }).then(({ products, count }) => {
-      // Apply client-side price filter (API doesn't support it)
       let filtered = products
       if (priceMin) filtered = filtered.filter(p => p.sellingPrice >= parseInt(priceMin))
       if (priceMax) filtered = filtered.filter(p => p.sellingPrice <= parseInt(priceMax))
       setProducts(filtered)
       setTotalCount(count)
       setPage(pg)
-    }).catch(() => {}).finally(() => setLoading(false))
+    })
+    .catch(err => console.error('[StorefrontShop] load failed:', err?.message ?? err))
+    .finally(() => setLoading(false))
   }, [business?.slug, search, selectedCategory, sort, priceMin, priceMax]) // eslint-disable-line
 
   useEffect(() => { load(1) }, [business?.slug, search, selectedCategory, sort]) // eslint-disable-line

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ExternalLink, Monitor, Tablet, Smartphone, Globe } from 'lucide-react'
+import { ExternalLink, Monitor, Tablet, Smartphone, Globe, ShoppingBag, Truck, ShieldCheck, MessageCircle, RefreshCw, ArrowRight } from 'lucide-react'
 import { Button, Input, Textarea, Tabs, ColorPicker, useToast, PageHeader, Skeleton } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { businessService } from '@/services/businessService'
@@ -9,47 +9,146 @@ type ViewportSize = 'desktop' | 'tablet' | 'mobile'
 
 // ── Storefront preview card ───────────────────────────────────────────────────
 
-function StorefrontPreview({ primary, name, heading, subheading, ctaText, viewport }: {
-  primary: string; name: string; heading: string; subheading: string; ctaText: string; viewport: ViewportSize
+function StorefrontPreview({ primary, accent, name, heading, subheading, ctaText, viewport }: {
+  primary: string; accent: string; name: string; heading: string; subheading: string; ctaText: string; viewport: ViewportSize
 }) {
-  const maxW = viewport === 'desktop' ? '100%' : viewport === 'tablet' ? '768px' : '375px'
+  const maxW = viewport === 'desktop' ? '100%' : viewport === 'tablet' ? '680px' : '360px'
+
+  const trustItems = [
+    { icon: <Truck size={11} />,         label: 'Fast Delivery' },
+    { icon: <ShieldCheck size={11} />,   label: 'Authentic' },
+    { icon: <MessageCircle size={11} />, label: 'WhatsApp' },
+    { icon: <RefreshCw size={11} />,     label: 'Easy Returns' },
+  ]
+
+  const products = [
+    { name: 'Velvet Oud', price: 'KSh 4,800', tag: 'Best seller' },
+    { name: 'Ocean Mist', price: 'KSh 3,200', tag: 'New' },
+    { name: 'Rose Bloom', price: 'KSh 5,500', tag: null },
+  ]
+
+  const showThree = viewport !== 'mobile'
+
   return (
-    <div className="flex justify-center overflow-hidden rounded-[12px] border border-sand bg-ivory/50 p-3" style={{ minHeight: 480 }}>
-      <div className="bg-white rounded-[8px] overflow-hidden border border-sand shadow-sm w-full transition-all duration-300" style={{ maxWidth: maxW }}>
-        {/* Nav */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-sand">
+    <div className="flex justify-center overflow-auto rounded-[12px] border border-sand bg-[#F5F3EE] p-3" style={{ minHeight: 560 }}>
+      <div
+        className="bg-white rounded-[8px] overflow-hidden border border-sand shadow-sm w-full transition-all duration-300 text-left"
+        style={{ maxWidth: maxW }}
+      >
+        {/* ── Announcement bar */}
+        <div className="text-white text-center text-[10px] py-1.5 px-3 font-medium" style={{ background: primary }}>
+          Order via WhatsApp · Free delivery over KSh 10,000
+        </div>
+
+        {/* ── Nav */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-sand bg-white">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full" style={{ background: primary }} />
-            <span className="font-serif font-semibold text-[14px] text-ink">{name || 'Your Store'}</span>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold font-serif" style={{ background: primary }}>
+              {(name || 'S')[0].toUpperCase()}
+            </div>
+            <span className="font-serif font-semibold text-[13px] text-ink">{name || 'Your Store'}</span>
           </div>
           {viewport !== 'mobile' && (
-            <div className="flex gap-4 text-[11px] text-slate">
+            <div className="flex gap-4 text-[11px] text-slate font-medium">
               {['Home', 'Shop', 'About', 'Contact'].map(l => <span key={l}>{l}</span>)}
             </div>
           )}
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-full border border-sand flex items-center justify-center">
+              <ShoppingBag size={11} className="text-ink" />
+            </div>
+          </div>
         </div>
-        {/* Hero */}
-        <div className="px-5 py-10 text-center" style={{ background: primary }}>
-          <h2 className="font-serif text-white text-[20px] mb-2">{heading || 'Welcome to our store'}</h2>
-          <p className="text-white/80 text-[12px] mb-4">{subheading || 'Discover our collection'}</p>
-          <button className="px-5 py-2 bg-white text-[12px] font-semibold rounded-[6px]" style={{ color: primary }}>
-            {ctaText || 'Shop Now'}
-          </button>
+
+        {/* ── Hero */}
+        <div
+          className="px-6 py-8 relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${primary}20 0%, ${primary}08 100%)` }}
+        >
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>
+            New Collection
+          </p>
+          <h2 className="font-serif text-ink text-[18px] leading-tight mb-2">
+            {heading || 'Welcome to our store'}
+          </h2>
+          <p className="text-slate text-[11px] mb-4 max-w-[240px]">
+            {subheading || 'Discover our curated collection'}
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              className="px-4 py-1.5 text-white text-[11px] font-semibold rounded-[6px] flex items-center gap-1 hover:opacity-90 transition-opacity"
+              style={{ background: primary }}
+            >
+              {ctaText || 'Shop Now'} <ArrowRight size={9} />
+            </button>
+            <button className="px-4 py-1.5 text-ink text-[11px] font-semibold rounded-[6px] border border-sand bg-white">
+              Best Sellers
+            </button>
+          </div>
         </div>
-        {/* Product placeholders */}
+
+        {/* ── Trust bar */}
+        <div className="border-t border-b border-sand bg-[#FAFAF8] px-4 py-2.5">
+          <div className={['grid gap-2', showThree ? 'grid-cols-4' : 'grid-cols-2'].join(' ')}>
+            {trustItems.map(item => (
+              <div key={item.label} className="flex items-center gap-1.5">
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: `${accent}18`, color: accent }}
+                >
+                  {item.icon}
+                </div>
+                <span className="text-[9.5px] font-semibold text-ink">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Featured products */}
         <div className="p-4">
-          <p className="text-[11px] font-semibold text-slate uppercase tracking-widest mb-3">Featured Products</p>
-          <div className={['grid gap-3', viewport === 'mobile' ? 'grid-cols-2' : 'grid-cols-3'].join(' ')}>
-            {['Product 1', 'Product 2', 'Product 3'].slice(0, viewport === 'mobile' ? 2 : 3).map(p => (
-              <div key={p} className="border border-sand rounded-[8px] overflow-hidden">
-                <div className="bg-sand h-24" />
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: accent }}>
+            Curated for you
+          </p>
+          <p className="font-serif text-[14px] text-ink mb-3">Featured Products</p>
+          <div className={['grid gap-2.5', showThree ? 'grid-cols-3' : 'grid-cols-2'].join(' ')}>
+            {products.slice(0, showThree ? 3 : 2).map(p => (
+              <div key={p.name} className="border border-sand rounded-[8px] overflow-hidden bg-white">
+                <div className="h-16 flex items-center justify-center" style={{ background: `${primary}10` }}>
+                  <ShoppingBag size={16} style={{ color: primary }} />
+                </div>
                 <div className="p-2">
-                  <p className="text-[11px] font-semibold text-ink">{p}</p>
-                  <p className="text-[10px] text-slate mt-0.5">KSh 4,800</p>
+                  {p.tag && (
+                    <span
+                      className="text-[8px] font-bold px-1.5 py-0.5 rounded-full mb-1 inline-block text-white"
+                      style={{ background: accent }}
+                    >
+                      {p.tag}
+                    </span>
+                  )}
+                  <p className="text-[10px] font-semibold text-ink leading-tight">{p.name}</p>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <p className="text-[10px] font-serif text-ink">{p.price}</p>
+                    <button
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-white shrink-0"
+                      style={{ background: primary }}
+                    >
+                      <ShoppingBag size={8} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── Promo banner */}
+        <div className="mx-4 mb-4 rounded-[8px] px-4 py-5 relative overflow-hidden" style={{ background: primary }}>
+          <p className="text-[9px] font-semibold text-white/70 uppercase tracking-widest mb-1">Limited time</p>
+          <p className="font-serif text-white text-[13px] mb-2.5">{name || 'Your Store'} · Special offer</p>
+          <button className="px-3 py-1 bg-white text-[10px] font-semibold rounded-[5px]" style={{ color: primary }}>
+            Shop Collection
+          </button>
+          <div className="absolute right-0 top-0 w-20 h-20 rounded-full opacity-10 bg-white translate-x-6 -translate-y-6" />
         </div>
       </div>
     </div>
@@ -302,6 +401,7 @@ export default function StorefrontMgmtPage() {
           </div>
           <StorefrontPreview
             primary={brandForm.primaryColor}
+            accent={brandForm.accentColor}
             name={brandForm.name}
             heading={homeForm.heading}
             subheading={homeForm.subheading}
@@ -349,23 +449,41 @@ export default function StorefrontMgmtPage() {
           </div>
 
           {/* Live colour preview */}
-          <div className="bg-white border border-sand rounded-[14px] p-5">
-            <h3 className="font-serif text-[17px] font-medium text-ink mb-4">Colour preview</h3>
-            <div className="space-y-3">
-              <div className="rounded-[10px] p-4 text-white" style={{ background: brandForm.primaryColor }}>
-                <p className="font-semibold text-[14px]">Primary — {brandForm.primaryColor}</p>
-                <p className="text-[12px] opacity-80 mt-0.5">Hero section, CTAs, highlights</p>
+          <div className="bg-white border border-sand rounded-[14px] p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-[17px] font-medium text-ink">Live preview</h3>
+              <span className="text-[11px] text-slate bg-sand px-2 py-0.5 rounded-full">Updates as you type</span>
+            </div>
+
+            {/* Mini storefront mockup */}
+            <StorefrontPreview
+              primary={brandForm.primaryColor}
+              accent={brandForm.accentColor}
+              name={brandForm.name}
+              heading={homeForm.heading}
+              subheading={homeForm.subheading}
+              ctaText={homeForm.ctaText}
+              viewport="desktop"
+            />
+
+            {/* Colour swatches legend */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="flex items-center gap-2.5 p-3 border border-sand rounded-[10px]">
+                <div className="w-8 h-8 rounded-[6px] shrink-0 shadow-sm" style={{ background: brandForm.primaryColor }} />
+                <div>
+                  <p className="text-[11px] font-semibold text-ink">Primary</p>
+                  <p className="text-[10px] text-slate font-mono">{brandForm.primaryColor}</p>
+                  <p className="text-[9.5px] text-slate/70 mt-0.5">Buttons, hero, banner</p>
+                </div>
               </div>
-              <div className="rounded-[10px] p-4 text-white" style={{ background: brandForm.accentColor }}>
-                <p className="font-semibold text-[14px]">Accent — {brandForm.accentColor}</p>
-                <p className="text-[12px] opacity-80 mt-0.5">Links, active states, badges</p>
+              <div className="flex items-center gap-2.5 p-3 border border-sand rounded-[10px]">
+                <div className="w-8 h-8 rounded-[6px] shrink-0 shadow-sm" style={{ background: brandForm.accentColor }} />
+                <div>
+                  <p className="text-[11px] font-semibold text-ink">Accent</p>
+                  <p className="text-[10px] text-slate font-mono">{brandForm.accentColor}</p>
+                  <p className="text-[9.5px] text-slate/70 mt-0.5">Labels, icons, badges</p>
+                </div>
               </div>
-              <button
-                className="w-full py-3 rounded-[10px] font-semibold text-[14px] text-white"
-                style={{ background: brandForm.primaryColor }}
-              >
-                Button preview
-              </button>
             </div>
           </div>
         </div>

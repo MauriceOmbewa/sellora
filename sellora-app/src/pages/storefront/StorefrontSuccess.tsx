@@ -8,6 +8,7 @@ export default function StorefrontSuccess() {
   const [searchParams] = useSearchParams()
   const orderNum = searchParams.get('order') ?? '000000'
   const primary = business?.theme.primaryColor ?? '#C79A3D'
+  const accent  = business?.theme.accentColor  ?? '#3F6B4F'
 
   return (
     <div className="max-w-[560px] mx-auto px-5 py-20 text-center">
@@ -28,7 +29,7 @@ export default function StorefrontSuccess() {
           'You\'ll receive delivery confirmation',
         ].map((step, i) => (
           <div key={i} className="flex items-start gap-3 text-[13.5px] text-slate">
-            <span className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" style={{ background: primary }}>
+            <span className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" style={{ background: accent }}>
               {i + 1}
             </span>
             {step}

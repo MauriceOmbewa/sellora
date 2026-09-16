@@ -7,6 +7,7 @@ import { ProductCard } from '@/components/storefront/ProductCard'
 export default function StorefrontHome() {
   const { business, products, loading, basePath } = useStorefront()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
+  const accent  = business?.theme.accentColor  ?? '#3F6B4F'
 
   // Show featured products; if none are marked featured, show ALL products (fallback)
   const featured   = products.filter(p => p.isFeatured).slice(0, 4)
@@ -52,7 +53,7 @@ export default function StorefrontHome() {
 
         <div className="relative z-10 max-w-[1200px] mx-auto px-5 lg:px-8 py-20 lg:py-28">
           <div className="max-w-xl">
-            <p className="text-[13px] font-semibold uppercase tracking-widest mb-5" style={{ color: primary }}>
+            <p className="text-[13px] font-semibold uppercase tracking-widest mb-5" style={{ color: accent }}>
               {business?.contact.city} · New Collection
             </p>
             <h1 className="font-serif text-[48px] lg:text-[60px] leading-[1.05] text-ink mb-5">
@@ -92,7 +93,7 @@ export default function StorefrontHome() {
               { icon: <RefreshCw size={16} />, title: 'Easy Returns', sub: '7-day return policy' },
             ].map(item => (
               <div key={item.title} className="flex items-center gap-3 px-4 first:pl-0 last:pr-0">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${primary}18`, color: primary }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${accent}18`, color: accent }}>
                   {item.icon}
                 </div>
                 <div>
@@ -111,7 +112,7 @@ export default function StorefrontHome() {
           <div className="max-w-[1200px] mx-auto px-5 lg:px-8">
             <div className="flex items-end justify-between mb-8">
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>
+                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: accent }}>
                   {showAll ? 'Our collection' : 'Curated for you'}
                 </p>
                 <h2 className="font-serif text-[32px] text-ink">
@@ -161,7 +162,7 @@ export default function StorefrontHome() {
           <div className="max-w-[1200px] mx-auto px-5 lg:px-8">
             <div className="flex items-end justify-between mb-8">
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>Most loved</p>
+                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: accent }}>Most loved</p>
                 <h2 className="font-serif text-[32px] text-ink">Best Sellers</h2>
               </div>
               <Link to={`${basePath}/shop?sort=best-selling`} className="hidden sm:flex items-center gap-1.5 text-[14px] font-semibold text-ink hover:opacity-70">
@@ -181,7 +182,7 @@ export default function StorefrontHome() {
           <div className="max-w-[1200px] mx-auto px-5 lg:px-8">
             <div className="flex items-end justify-between mb-8">
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>Just landed</p>
+                <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: accent }}>Just landed</p>
                 <h2 className="font-serif text-[32px] text-ink">New Arrivals</h2>
               </div>
             </div>
@@ -196,7 +197,7 @@ export default function StorefrontHome() {
       <section className="py-16 bg-ink">
         <div className="max-w-[1200px] mx-auto px-5 lg:px-8">
           <div className="text-center mb-10">
-            <p className="text-[12px] font-semibold uppercase tracking-widest mb-3" style={{ color: primary }}>What customers say</p>
+            <p className="text-[12px] font-semibold uppercase tracking-widest mb-3" style={{ color: accent }}>What customers say</p>
             <h2 className="font-serif text-[32px] text-ivory">Real reviews</h2>
           </div>
           <div className="grid sm:grid-cols-3 gap-5">
@@ -225,7 +226,7 @@ export default function StorefrontHome() {
           <div className="max-w-[1200px] mx-auto px-5 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-widest mb-4" style={{ color: primary }}>Our story</p>
+                <p className="text-[12px] font-semibold uppercase tracking-widest mb-4" style={{ color: accent }}>Our story</p>
                 <h2 className="font-serif text-[36px] text-ink leading-tight mb-5">About {business.name}</h2>
                 <p className="text-[16px] text-slate leading-relaxed mb-6">{business.aboutText}</p>
                 <Link to={`${basePath}/about`} className="inline-flex items-center gap-2 font-semibold text-ink hover:opacity-70">

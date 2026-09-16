@@ -21,6 +21,7 @@ export default function StorefrontShop() {
     const { business, categories, basePath } = useStorefront()
   const [searchParams] = useSearchParams()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
+  const accent  = business?.theme.accentColor  ?? '#3F6B4F'
 
   const [products, setProducts]     = useState<Product[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -73,7 +74,7 @@ export default function StorefrontShop() {
             <button key={cat.id} onClick={() => setCategory(cat.id)}
               className={['w-full text-left px-3 py-2 rounded-[8px] text-[13.5px] transition-colors',
                 selectedCategory === cat.id ? 'font-semibold' : 'text-slate hover:text-ink'].join(' ')}
-              style={selectedCategory === cat.id ? { color: primary, background: `${primary}12` } : {}}>
+              style={selectedCategory === cat.id ? { color: accent, background: `${accent}12` } : {}}>
               {cat.name}
             </button>
           ))}
@@ -93,7 +94,7 @@ export default function StorefrontShop() {
         {(priceMin || priceMax) && (
           <button onClick={() => load(1)}
             className="mt-2 text-[13px] font-semibold w-full py-2 rounded-[8px] text-white"
-            style={{ background: primary }}>
+            style={{ background: accent }}>
             Apply
           </button>
         )}

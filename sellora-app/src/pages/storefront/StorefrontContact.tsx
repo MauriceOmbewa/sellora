@@ -9,6 +9,7 @@ export default function StorefrontContact() {
     const { business, basePath } = useStorefront()
   const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
+  const accent  = business?.theme.accentColor  ?? '#3F6B4F'
   const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' })
   const [sent, setSent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -44,9 +45,9 @@ export default function StorefrontContact() {
   return (
     <div>
       {/* Hero */}
-      <section className="py-16 text-center" style={{ background: `${primary}10` }}>
+      <section className="py-16 text-center" style={{ background: `${accent}10` }}>
         <div className="max-w-[600px] mx-auto px-5">
-          <p className="text-[12px] font-semibold uppercase tracking-widest mb-4" style={{ color: primary }}>Get in touch</p>
+          <p className="text-[12px] font-semibold uppercase tracking-widest mb-4" style={{ color: accent }}>Get in touch</p>
           <h1 className="font-serif text-[44px] text-ink mb-4">Contact us</h1>
           <p className="text-[16px] text-slate">Have a question, want to place an order, or just want to say hello? We'd love to hear from you.</p>
         </div>
@@ -61,7 +62,7 @@ export default function StorefrontContact() {
             <div className="space-y-4">
               {business?.contact.phone && (
                 <a href={`tel:${business.contact.phone}`} className="flex items-center gap-4 p-4 bg-white border border-sand rounded-[12px] hover:border-ink/20 transition-colors group">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${primary}18`, color: primary }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${accent}18`, color: accent }}>
                     <Phone size={16} />
                   </div>
                   <div>
@@ -89,7 +90,7 @@ export default function StorefrontContact() {
 
               {business?.contact.email && (
                 <a href={`mailto:${business.contact.email}`} className="flex items-center gap-4 p-4 bg-white border border-sand rounded-[12px] hover:border-ink/20 transition-colors">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${primary}18`, color: primary }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${accent}18`, color: accent }}>
                     <Mail size={16} />
                   </div>
                   <div>
@@ -101,7 +102,7 @@ export default function StorefrontContact() {
 
               {business?.contact.address && (
                 <div className="flex items-start gap-4 p-4 bg-white border border-sand rounded-[12px]">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${primary}18`, color: primary }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${accent}18`, color: accent }}>
                     <MapPin size={16} />
                   </div>
                   <div>
@@ -114,7 +115,7 @@ export default function StorefrontContact() {
 
               {business?.contact.openingHours && (
                 <div className="flex items-center gap-4 p-4 bg-white border border-sand rounded-[12px]">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${primary}18`, color: primary }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${accent}18`, color: accent }}>
                     <Clock size={16} />
                   </div>
                   <div>
@@ -151,8 +152,8 @@ export default function StorefrontContact() {
           <div className="bg-white border border-sand rounded-[16px] p-6">
             {sent ? (
               <div className="py-12 text-center">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: `${primary}18` }}>
-                  <Send size={22} style={{ color: primary }} />
+                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: `${accent}18` }}>
+                  <Send size={22} style={{ color: accent }} />
                 </div>
                 <h2 className="font-serif text-[24px] text-ink mb-3">Message sent!</h2>
                 <p className="text-slate">We'll get back to you as soon as possible.</p>

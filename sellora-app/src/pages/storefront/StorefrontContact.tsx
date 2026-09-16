@@ -6,8 +6,7 @@ import { Input, Textarea, useToast } from '@/components/ui'
 import { storefrontService } from '@/services/storefrontService'
 
 export default function StorefrontContact() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { business } = useStorefront()
+    const { business, basePath } = useStorefront()
   const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
   const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' })
@@ -27,7 +26,7 @@ export default function StorefrontContact() {
 
     setSubmitting(true)
     try {
-      await storefrontService.sendMessage(businessSlug!, {
+      await storefrontService.sendMessage(business!.slug, {
         sender_name:  form.name,
         sender_phone: form.phone || undefined,
         sender_email: form.email || undefined,

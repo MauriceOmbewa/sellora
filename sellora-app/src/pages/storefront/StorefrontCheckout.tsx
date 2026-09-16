@@ -8,12 +8,10 @@ import { storefrontService } from '@/services/storefrontService'
 type PaymentMethod = 'mpesa' | 'cash' | 'whatsapp'
 
 export default function StorefrontCheckout() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { cart, business, clearCart } = useStorefront()
+    const { cart, business, clearCart, basePath } = useStorefront()
   const navigate = useNavigate()
   const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
-  const base = `/store/${businessSlug}`
 
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
   const [payment, setPayment] = useState<PaymentMethod>('mpesa')
@@ -34,7 +32,7 @@ export default function StorefrontCheckout() {
     if (Object.keys(e).length > 0) { setErrors(e); return }
     setSubmitting(true)
     try {
-      const confirmation = await storefrontService.placeOrder(businessSlug!, {
+      const confirmation = await storefrontService.placeOrder(business!.slug, {
         customer_name:    form.name,
         customer_phone:   form.phone,
         customer_email:   form.email || undefined,
@@ -47,7 +45,7 @@ export default function StorefrontCheckout() {
         })),
       })
       clearCart()
-      navigate(`${base}/success?order=${confirmation.order_number}`)
+      navigate(`${basePath}/success?order=${confirmation.order_number}`)
     } catch (err: unknown) {
       toast('error', 'Order failed', err instanceof Error ? err.message : 'Please try again.')
       setSubmitting(false)
@@ -61,13 +59,13 @@ export default function StorefrontCheckout() {
   ]
 
   if (cart.items.length === 0) {
-    navigate(`${base}/cart`)
+    navigate(`${basePath}/cart`)
     return null
   }
 
   return (
     <div className="max-w-[1200px] mx-auto px-5 lg:px-8 py-10">
-      <button onClick={() => navigate(`${base}/cart`)} className="flex items-center gap-2 text-[13.5px] text-slate hover:text-ink mb-7">
+      <button onClick={() => navigate(`${basePath}/cart`)} className="flex items-center gap-2 text-[13.5px] text-slate hover:text-ink mb-7">
         <ArrowLeft size={15} /> Back to cart
       </button>
 

@@ -5,9 +5,7 @@ import { useStorefront } from '@/context/StorefrontContext'
 import { ProductCard } from '@/components/storefront/ProductCard'
 
 export default function StorefrontHome() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { business, products, loading } = useStorefront()
-  const base = `/store/${businessSlug}`
+    const { business, products, loading, basePath } = useStorefront()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
   const featured = products.filter(p => p.isFeatured).slice(0, 4)
@@ -62,7 +60,7 @@ export default function StorefrontHome() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
-                to={`${base}/shop`}
+                to={`${basePath}/shop`}
                 className="inline-flex items-center gap-2 px-7 py-3.5 font-semibold text-[15px] text-white rounded-[10px] hover:opacity-90 transition-opacity"
                 style={{ background: primary }}
               >
@@ -70,7 +68,7 @@ export default function StorefrontHome() {
                 <ArrowRight size={16} />
               </Link>
               <Link
-                to={`${base}/shop?sort=best-selling`}
+                to={`${basePath}/shop?sort=best-selling`}
                 className="inline-flex items-center gap-2 px-7 py-3.5 font-semibold text-[15px] text-ink bg-white border border-sand rounded-[10px] hover:border-ink transition-colors"
               >
                 {business?.hero.ctaSecondaryText ?? 'Best Sellers'}
@@ -113,7 +111,7 @@ export default function StorefrontHome() {
                 <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>Curated for you</p>
                 <h2 className="font-serif text-[32px] text-ink">Featured Products</h2>
               </div>
-              <Link to={`${base}/shop`} className="hidden sm:flex items-center gap-1.5 text-[14px] font-semibold text-ink hover:opacity-70 transition-opacity">
+              <Link to={`${basePath}/shop`} className="hidden sm:flex items-center gap-1.5 text-[14px] font-semibold text-ink hover:opacity-70 transition-opacity">
                 View all <ArrowRight size={14} />
               </Link>
             </div>
@@ -134,7 +132,7 @@ export default function StorefrontHome() {
                 {business?.motto ?? 'Discover our collection'}
               </h2>
               <Link
-                to={`${base}/shop`}
+                to={`${basePath}/shop`}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-white font-semibold text-[14px] rounded-[8px] hover:bg-ivory transition-colors"
                 style={{ color: primary }}
               >
@@ -157,7 +155,7 @@ export default function StorefrontHome() {
                 <p className="text-[12px] font-semibold uppercase tracking-widest mb-2" style={{ color: primary }}>Most loved</p>
                 <h2 className="font-serif text-[32px] text-ink">Best Sellers</h2>
               </div>
-              <Link to={`${base}/shop?sort=best-selling`} className="hidden sm:flex items-center gap-1.5 text-[14px] font-semibold text-ink hover:opacity-70">
+              <Link to={`${basePath}/shop?sort=best-selling`} className="hidden sm:flex items-center gap-1.5 text-[14px] font-semibold text-ink hover:opacity-70">
                 View all <ArrowRight size={14} />
               </Link>
             </div>
@@ -221,7 +219,7 @@ export default function StorefrontHome() {
                 <p className="text-[12px] font-semibold uppercase tracking-widest mb-4" style={{ color: primary }}>Our story</p>
                 <h2 className="font-serif text-[36px] text-ink leading-tight mb-5">About {business.name}</h2>
                 <p className="text-[16px] text-slate leading-relaxed mb-6">{business.aboutText}</p>
-                <Link to={`${base}/about`} className="inline-flex items-center gap-2 font-semibold text-ink hover:opacity-70">
+                <Link to={`${basePath}/about`} className="inline-flex items-center gap-2 font-semibold text-ink hover:opacity-70">
                   Read our story <ArrowRight size={15} />
                 </Link>
               </div>

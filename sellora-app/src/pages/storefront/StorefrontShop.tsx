@@ -18,8 +18,7 @@ const sortLabels: Record<SortOption, string> = {
 }
 
 export default function StorefrontShop() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { business, categories } = useStorefront()
+    const { business, categories, basePath } = useStorefront()
   const [searchParams] = useSearchParams()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
@@ -37,9 +36,9 @@ export default function StorefrontShop() {
   const [showFilters, setShowFilters]      = useState(false)
 
   const load = useCallback((pg = 1) => {
-    if (!businessSlug) return
+    if (!business) return
     setLoading(true)
-    storefrontService.getProducts(businessSlug, {
+    storefrontService.getProducts(business.slug, {
       search:      search || undefined,
       category_id: selectedCategory || undefined,
       sort,
@@ -54,9 +53,9 @@ export default function StorefrontShop() {
       setTotalCount(count)
       setPage(pg)
     }).catch(() => {}).finally(() => setLoading(false))
-  }, [businessSlug, search, selectedCategory, sort, priceMin, priceMax]) // eslint-disable-line
+  }, [business?.slug, search, selectedCategory, sort, priceMin, priceMax]) // eslint-disable-line
 
-  useEffect(() => { load(1) }, [businessSlug, search, selectedCategory, sort]) // eslint-disable-line
+  useEffect(() => { load(1) }, [business?.slug, search, selectedCategory, sort]) // eslint-disable-line
 
   const hasFilters = selectedCategory || priceMin || priceMax || search
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)

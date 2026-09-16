@@ -1,13 +1,11 @@
 import React from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Minus, Plus, Trash2, ShoppingBag, MessageCircle, ArrowRight } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
 
 export default function StorefrontCart() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { cart, updateQty, removeFromCart, business } = useStorefront()
+    const { cart, updateQty, removeFromCart, business, basePath } = useStorefront()
   const navigate = useNavigate()
-  const base = `/store/${businessSlug}`
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
   const handleWhatsAppOrder = () => {
@@ -25,7 +23,7 @@ export default function StorefrontCart() {
         <h1 className="font-serif text-[28px] text-ink mb-3">Your cart is empty</h1>
         <p className="text-slate mb-7">Looks like you haven't added anything yet.</p>
         <Link
-          to={`${base}/shop`}
+          to={`${basePath}/shop`}
           className="inline-flex items-center gap-2 px-7 py-3.5 font-semibold text-[15px] text-white rounded-[10px]"
           style={{ background: primary }}
         >
@@ -45,7 +43,7 @@ export default function StorefrontCart() {
           {cart.items.map(item => (
             <div key={item.productId} className="flex gap-4 bg-white border border-sand rounded-[14px] p-4">
               {/* Image */}
-              <Link to={`${base}/product/${item.product.slug}`} className="shrink-0">
+              <Link to={`${basePath}/product/${item.product.slug}`} className="shrink-0">
                 <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-[10px] overflow-hidden bg-ivory border border-sand">
                   {item.product.images[0] ? (
                     <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover" />
@@ -59,7 +57,7 @@ export default function StorefrontCart() {
 
               {/* Details */}
               <div className="flex-1 min-w-0">
-                <Link to={`${base}/product/${item.product.slug}`}>
+                <Link to={`${basePath}/product/${item.product.slug}`}>
                   <h3 className="font-semibold text-ink text-[14px] mb-0.5 hover:opacity-70 transition-opacity">{item.product.name}</h3>
                 </Link>
                 <p className="text-[12.5px] text-slate mb-3">{item.product.categoryName}</p>
@@ -121,7 +119,7 @@ export default function StorefrontCart() {
           </div>
 
           <button
-            onClick={() => navigate(`${base}/checkout`)}
+            onClick={() => navigate(`${basePath}/checkout`)}
             className="w-full flex items-center justify-center gap-2.5 py-4 text-white font-semibold text-[15px] rounded-[10px] hover:opacity-90 transition-opacity"
             style={{ background: primary }}
           >
@@ -139,7 +137,7 @@ export default function StorefrontCart() {
           )}
 
           <Link
-            to={`${base}/shop`}
+            to={`${basePath}/shop`}
             className="block text-center text-[13.5px] text-slate hover:text-ink font-medium mt-1"
           >
             ← Continue shopping

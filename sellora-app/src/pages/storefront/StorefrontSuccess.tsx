@@ -4,12 +4,10 @@ import { CheckCircle, MessageCircle, ShoppingBag } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
 
 export default function StorefrontSuccess() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { business } = useStorefront()
+    const { business, basePath } = useStorefront()
   const [searchParams] = useSearchParams()
   const orderNum = searchParams.get('order') ?? '000000'
   const primary = business?.theme.primaryColor ?? '#C79A3D'
-  const base = `/store/${businessSlug}`
 
   return (
     <div className="max-w-[560px] mx-auto px-5 py-20 text-center">
@@ -40,7 +38,7 @@ export default function StorefrontSuccess() {
 
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <Link
-          to={`${base}/shop`}
+          to={`${basePath}/shop`}
           className="flex items-center justify-center gap-2 px-6 py-3.5 font-semibold text-[14px] text-white rounded-[10px]"
           style={{ background: primary }}
         >

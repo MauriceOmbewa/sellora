@@ -5,7 +5,7 @@ import { ToastProvider } from '@/components/ui'
 import { MarketingLayout } from '@/components/layouts/MarketingLayout'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 
-// Marketing
+// ── Lazy pages — Marketing ────────────────────────────────────────────────────
 const LandingPage        = lazy(() => import('@/pages/marketing/LandingPage'))
 
 // Auth
@@ -18,7 +18,7 @@ const OnboardingPage     = lazy(() => import('@/pages/onboarding/OnboardingPage'
 // My businesses
 const MyBusinessesPage   = lazy(() => import('@/pages/MyBusinessesPage'))
 
-// Dashboard pages
+// Dashboard
 const OverviewPage       = lazy(() => import('@/pages/dashboard/OverviewPage'))
 const ProductsPage       = lazy(() => import('@/pages/dashboard/ProductsPage'))
 const ProductDetailPage  = lazy(() => import('@/pages/dashboard/ProductDetailPage'))
@@ -45,6 +45,42 @@ const StorefrontSuccess  = lazy(() => import('@/pages/storefront/StorefrontSucce
 const StorefrontAbout    = lazy(() => import('@/pages/storefront/StorefrontAbout'))
 const StorefrontContact  = lazy(() => import('@/pages/storefront/StorefrontContact'))
 
+// ── Hostname detection ────────────────────────────────────────────────────────
+//
+// Production subdomain routing:
+//   sellora.co.ke            → admin SaaS (marketing + dashboard)
+//   kladi-collections.sellora.co.ke → storefront for "kladi-collections"
+//
+// Development:
+//   localhost:5173           → admin SaaS
+//   localhost:5173/store/:slug → storefront (path-based fallback)
+//
+// The VITE_SAAS_DOMAIN env var tells us the root domain (e.g. "sellora.co.ke").
+// Any subdomain of it is treated as a storefront slug.
+//
+const SAAS_DOMAIN = import.meta.env.VITE_SAAS_DOMAIN ?? ''
+
+function getStorefrontSlug(): string | null {
+  const host = window.location.hostname  // e.g. "kladi-collections.sellora.co.ke"
+
+  // Production: check if this is a subdomain of the SaaS domain
+  if (SAAS_DOMAIN && host !== SAAS_DOMAIN && host.endsWith(`.${SAAS_DOMAIN}`)) {
+    const slug = host.slice(0, host.length - SAAS_DOMAIN.length - 1)
+    // Ignore "www" — that's still the main site
+    if (slug && slug !== 'www') return slug
+  }
+
+  // Local dev: support `slug.localhost` pattern as well
+  if (!SAAS_DOMAIN && host !== 'localhost' && host.endsWith('.localhost')) {
+    const slug = host.replace('.localhost', '')
+    if (slug) return slug
+  }
+
+  return null  // Not a storefront subdomain — render the admin SaaS app
+}
+
+// ── Page loader ───────────────────────────────────────────────────────────────
+
 function PageLoader() {
   return (
     <div className="min-h-screen bg-ivory flex items-center justify-center">
@@ -56,9 +92,10 @@ function PageLoader() {
   )
 }
 
+// ── Auth guards ───────────────────────────────────────────────────────────────
+
 function AuthenticatedRedirect({ children }: { children: React.ReactNode }) {
   const { authState } = useAuth()
-  // If already signed in, send to /businesses to pick a business
   if (authState === 'authenticated') return <Navigate to="/businesses" replace />
   if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
   return <>{children}</>
@@ -72,18 +109,46 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-// Dashboard specifically requires a business to be selected
 function RequireBusiness({ children }: { children: React.ReactNode }) {
   const { authState, currentBusiness } = useAuth()
   if (authState === 'loading') return <PageLoader />
   if (authState === 'unauthenticated') return <Navigate to="/login" replace />
   if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
-  // If authenticated but no business chosen yet, send to /businesses
   if (!currentBusiness) return <Navigate to="/businesses" replace />
   return <>{children}</>
 }
 
-function AppRoutes() {
+// ── Storefront routes (used for both subdomain and /store/:slug path) ─────────
+
+function StorefrontRoutes({ slug }: { slug: string }) {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {/* We inject the slug as a route param by wrapping in a fake param segment */}
+      <Routes>
+        <Route
+          path="/*"
+          element={
+            <StorefrontLayout overrideSlug={slug} />
+          }
+        >
+          <Route index element={<StorefrontHome />} />
+          <Route path="shop" element={<StorefrontShop />} />
+          <Route path="product/:productSlug" element={<StorefrontProduct />} />
+          <Route path="cart" element={<StorefrontCart />} />
+          <Route path="checkout" element={<StorefrontCheckout />} />
+          <Route path="success" element={<StorefrontSuccess />} />
+          <Route path="about" element={<StorefrontAbout />} />
+          <Route path="contact" element={<StorefrontContact />} />
+          <Route path="*" element={<Navigate to="." replace />} />
+        </Route>
+      </Routes>
+    </Suspense>
+  )
+}
+
+// ── Main routes (admin SaaS) ──────────────────────────────────────────────────
+
+function AdminRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
@@ -93,41 +158,18 @@ function AppRoutes() {
         </Route>
 
         {/* Auth */}
-        <Route
-          path="/login"
-          element={
-            <AuthenticatedRedirect>
-              <LoginPage />
-            </AuthenticatedRedirect>
-          }
-        />
-
-        {/* OAuth callback — backend redirects here after Google login */}
+        <Route path="/login" element={<AuthenticatedRedirect><LoginPage /></AuthenticatedRedirect>} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
-
-        {/* Auth error page */}
-        <Route
-          path="/auth/error"
-          element={<AuthCallbackPage />}
-        />
+        <Route path="/auth/error" element={<AuthCallbackPage />} />
 
         {/* Onboarding */}
         <Route path="/onboarding" element={<OnboardingPage />} />
 
-        {/* My businesses — handles both authenticated users AND the post-OAuth
-            token callback. Must NOT be behind RequireAuth because it processes
-            the tokens from the URL before the auth state is established. */}
+        {/* My businesses */}
         <Route path="/businesses" element={<MyBusinessesPage />} />
 
-        {/* Dashboard — requires a business to be selected */}
-        <Route
-          path="/app"
-          element={
-            <RequireBusiness>
-              <DashboardLayout />
-            </RequireBusiness>
-          }
-        >
+        {/* Dashboard */}
+        <Route path="/app" element={<RequireBusiness><DashboardLayout /></RequireBusiness>}>
           <Route index element={<OverviewPage />} />
           <Route path="products" element={<ProductsPage />} />
           <Route path="products/new" element={<ProductDetailPage />} />
@@ -145,9 +187,9 @@ function AppRoutes() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
-        {/* Public storefront */}
+        {/* Path-based storefront (dev fallback: /store/:slug/*) */}
         <Route
-          path="/store/:businessSlug"
+          path="/store/:businessSlug/*"
           element={
             <Suspense fallback={<PageLoader />}>
               <StorefrontLayout />
@@ -164,21 +206,41 @@ function AppRoutes() {
           <Route path="contact" element={<StorefrontContact />} />
         </Route>
 
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   )
 }
 
-export default function App() {
+// ── App root ──────────────────────────────────────────────────────────────────
+
+function AppContent() {
+  const storefrontSlug = getStorefrontSlug()
+
+  // Subdomain routing: kladi-collections.sellora.co.ke
+  // Render the storefront directly — no path prefix needed
+  if (storefrontSlug) {
+    return (
+      <BrowserRouter>
+        <StorefrontRoutes slug={storefrontSlug} />
+      </BrowserRouter>
+    )
+  }
+
+  // Standard admin SaaS routing
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
-      </AuthProvider>
+      <AdminRoutes />
     </BrowserRouter>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </AuthProvider>
   )
 }

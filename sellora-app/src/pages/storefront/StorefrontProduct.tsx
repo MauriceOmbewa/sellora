@@ -8,31 +8,30 @@ import { storefrontService } from '@/services/storefrontService'
 import type { Product } from '@/types'
 
 export default function StorefrontProduct() {
-  const { businessSlug, productSlug } = useParams<{ businessSlug: string; productSlug: string }>()
-  const { products, business, addToCart } = useStorefront()
+  const { productSlug } = useParams<{ productSlug: string }>()
+  const { products, business, addToCart, basePath } = useStorefront()
   const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
-  const [product, setProduct]       = useState<Product | null>(null)
-  const [loading, setLoading]       = useState(true)
+  const [product, setProduct]             = useState<Product | null>(null)
+  const [loading, setLoading]             = useState(true)
   const [selectedImage, setSelectedImage] = useState(0)
-  const [qty, setQty]               = useState(1)
+  const [qty, setQty]                     = useState(1)
 
-  // Fetch the product from the API using the slug
+  // Fetch product — use context cache first, fall back to API
   useEffect(() => {
-    if (!businessSlug || !productSlug) return
+    if (!productSlug || !business) return
     setLoading(true)
-    // First check context products (already loaded), fall back to API call
     const cached = products.find(p => p.slug === productSlug)
     if (cached) {
       setProduct(cached)
       setLoading(false)
     } else {
-      storefrontService.getProduct(businessSlug, productSlug)
+      storefrontService.getProduct(business.slug, productSlug)
         .then(p => { setProduct(p); setLoading(false) })
         .catch(() => setLoading(false))
     }
-  }, [businessSlug, productSlug, products]) // eslint-disable-line
+  }, [productSlug, business?.slug, products]) // eslint-disable-line
 
   const related = products.filter(p => p.id !== product?.id && p.categoryId === product?.categoryId).slice(0, 4)
 
@@ -55,7 +54,7 @@ export default function StorefrontProduct() {
     return (
       <div className="max-w-[1200px] mx-auto px-5 py-20 text-center">
         <p className="font-serif text-[28px] text-ink mb-4">Product not found</p>
-        <Link to={`/store/${businessSlug}/shop`} className="text-ink font-semibold hover:underline">
+        <Link to={`${basePath}/shop`} className="text-ink font-semibold hover:underline">
           ← Back to Shop
         </Link>
       </div>
@@ -73,50 +72,39 @@ export default function StorefrontProduct() {
   }
 
   const inStock = product.stockQuantity > 0
-  const isLow = inStock && product.stockQuantity <= product.lowStockThreshold
+  const isLow   = inStock && product.stockQuantity <= product.lowStockThreshold
 
   return (
     <div>
       <div className="max-w-[1200px] mx-auto px-5 lg:px-8 py-8">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-[13px] text-slate mb-6">
-          <Link to={`/store/${businessSlug}`} className="hover:text-ink">Home</Link>
+          <Link to={basePath} className="hover:text-ink">Home</Link>
           <span>/</span>
-          <Link to={`/store/${businessSlug}/shop`} className="hover:text-ink">Shop</Link>
+          <Link to={`${basePath}/shop`} className="hover:text-ink">Shop</Link>
           <span>/</span>
           <span className="text-ink font-medium truncate max-w-[200px]">{product.name}</span>
         </nav>
 
-        {/* Product detail */}
+        {/* Product */}
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-14">
           {/* Images */}
           <div className="space-y-3">
-            {/* Main image */}
             <div className="aspect-square rounded-[16px] overflow-hidden bg-ivory border border-sand">
               {product.images[selectedImage] ? (
-                <img
-                  src={product.images[selectedImage]}
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
+                <img src={product.images[selectedImage]} alt={product.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Package size={48} className="text-sand-dark" />
                 </div>
               )}
             </div>
-            {/* Thumbnails */}
             {product.images.length > 1 && (
               <div className="flex gap-2">
                 {product.images.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedImage(i)}
-                    className={[
-                      'w-16 h-16 rounded-[10px] overflow-hidden border-2 transition-colors',
-                      selectedImage === i ? 'border-ink' : 'border-sand hover:border-sand-dark',
-                    ].join(' ')}
-                  >
+                  <button key={i} onClick={() => setSelectedImage(i)}
+                    className={['w-16 h-16 rounded-[10px] overflow-hidden border-2 transition-colors',
+                      selectedImage === i ? 'border-ink' : 'border-sand hover:border-sand-dark'].join(' ')}>
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
@@ -129,7 +117,6 @@ export default function StorefrontProduct() {
             <p className="text-[13px] text-slate mb-2">{product.categoryName}</p>
             <h1 className="font-serif text-[32px] lg:text-[38px] text-ink leading-tight mb-4">{product.name}</h1>
 
-            {/* Price */}
             <div className="flex items-baseline gap-3 mb-4">
               <p className="font-serif text-[28px] font-semibold text-ink">
                 KSh {product.sellingPrice.toLocaleString()}
@@ -139,7 +126,6 @@ export default function StorefrontProduct() {
               )}
             </div>
 
-            {/* Stock */}
             <div className="mb-5">
               {!inStock ? (
                 <span className="text-[13px] font-semibold text-red">Out of stock</span>
@@ -147,57 +133,42 @@ export default function StorefrontProduct() {
                 <span className="text-[13px] font-semibold text-gold-deep">Only {product.stockQuantity} left — order soon</span>
               ) : (
                 <span className="text-[13px] font-semibold text-green flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-green rounded-full" />
-                  In stock
+                  <span className="w-2 h-2 bg-green rounded-full" /> In stock
                 </span>
               )}
             </div>
 
-            {/* Description */}
             <p className="text-[15px] text-slate leading-relaxed mb-7">{product.description}</p>
 
-            {/* Qty + Add to cart */}
             {inStock && (
               <div className="space-y-3 mb-6">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center border border-sand rounded-[10px] overflow-hidden">
-                    <button
-                      onClick={() => setQty(q => Math.max(1, q - 1))}
-                      className="w-11 h-11 flex items-center justify-center hover:bg-sand transition-colors"
-                    >
+                    <button onClick={() => setQty(q => Math.max(1, q - 1))}
+                      className="w-11 h-11 flex items-center justify-center hover:bg-sand">
                       <Minus size={14} />
                     </button>
                     <span className="w-12 text-center font-semibold text-ink text-[15px]">{qty}</span>
-                    <button
-                      onClick={() => setQty(q => Math.min(product.stockQuantity, q + 1))}
-                      className="w-11 h-11 flex items-center justify-center hover:bg-sand transition-colors"
-                    >
+                    <button onClick={() => setQty(q => Math.min(product.stockQuantity, q + 1))}
+                      className="w-11 h-11 flex items-center justify-center hover:bg-sand">
                       <Plus size={14} />
                     </button>
                   </div>
-                  <button
-                    onClick={handleAddToCart}
+                  <button onClick={handleAddToCart}
                     className="flex-1 flex items-center justify-center gap-2.5 py-3.5 text-white font-semibold text-[15px] rounded-[10px] hover:opacity-90 transition-opacity"
-                    style={{ background: primary }}
-                  >
-                    <ShoppingBag size={17} />
-                    Add to Cart
+                    style={{ background: primary }}>
+                    <ShoppingBag size={17} /> Add to Cart
                   </button>
                 </div>
-
                 {business?.contact.whatsapp && (
-                  <button
-                    onClick={handleWhatsApp}
-                    className="w-full flex items-center justify-center gap-2.5 py-3.5 text-green font-semibold text-[15px] rounded-[10px] border-2 border-green/20 bg-green-light hover:bg-green/10 transition-colors"
-                  >
-                    <MessageCircle size={17} />
-                    Inquire via WhatsApp
+                  <button onClick={handleWhatsApp}
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 text-green font-semibold text-[15px] rounded-[10px] border-2 border-green/20 bg-green-light hover:bg-green/10 transition-colors">
+                    <MessageCircle size={17} /> Inquire via WhatsApp
                   </button>
                 )}
               </div>
             )}
 
-            {/* Delivery info */}
             <div className="border border-sand rounded-[12px] p-4 space-y-3">
               {[
                 { icon: <Truck size={15} className="text-slate" />, text: 'Same-day delivery available in Nairobi' },
@@ -205,15 +176,14 @@ export default function StorefrontProduct() {
                 { icon: <MessageCircle size={15} className="text-slate" />, text: 'WhatsApp support for all orders' },
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-3 text-[13.5px] text-slate">
-                  {item.icon}
-                  {item.text}
+                  {item.icon} {item.text}
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Related products */}
+        {/* Related */}
         {related.length > 0 && (
           <div className="mt-16 pt-10 border-t border-sand">
             <h2 className="font-serif text-[26px] text-ink mb-6">You might also like</h2>

@@ -4,10 +4,8 @@ import { ArrowRight, MessageCircle } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
 
 export default function StorefrontAbout() {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { business, products } = useStorefront()
+    const { business, products, basePath } = useStorefront()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
-  const base = `/store/${businessSlug}`
 
   return (
     <div>
@@ -79,7 +77,7 @@ export default function StorefrontAbout() {
         <h2 className="font-serif text-[28px] text-ink mb-4">Ready to find your perfect product?</h2>
         <div className="flex justify-center gap-3 flex-wrap">
           <Link
-            to={`${base}/shop`}
+            to={`${basePath}/shop`}
             className="inline-flex items-center gap-2 px-6 py-3.5 text-white font-semibold text-[14px] rounded-[10px]"
             style={{ background: primary }}
           >

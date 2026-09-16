@@ -21,6 +21,11 @@ interface StorefrontContextType {
   cart: Cart
   loading: boolean
   notFound: boolean
+  /** Base URL prefix for storefront links.
+   *  - Path mode:     "/store/kladi-collections"
+   *  - Subdomain mode: "" (root)
+   */
+  basePath: string
   addToCart: (product: Product, qty: number) => void
   removeFromCart: (productId: string) => void
   updateQty: (productId: string, qty: number) => void
@@ -32,9 +37,11 @@ const StorefrontContext = createContext<StorefrontContextType | null>(null)
 export function StorefrontProvider({
   children,
   businessSlug,
+  basePath = '',
 }: {
   children: React.ReactNode
   businessSlug: string
+  basePath?: string
 }) {
   const [business, setBusiness]     = useState<Business | null>(null)
   const [products, setProducts]     = useState<Product[]>([])
@@ -132,6 +139,7 @@ export function StorefrontProvider({
   return (
     <StorefrontContext.Provider value={{
       business, products, categories, cart, loading, notFound,
+      basePath,
       addToCart, removeFromCart, updateQty, clearCart,
     }}>
       {children}

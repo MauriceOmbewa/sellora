@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { ShoppingBag, Heart } from 'lucide-react'
 import type { Product } from '@/types'
 import { useStorefront } from '@/context/StorefrontContext'
@@ -16,8 +16,7 @@ const badgeStyles: Record<string, string> = {
 }
 
 export function ProductCard({ product, className = '' }: ProductCardProps) {
-  const { businessSlug } = useParams<{ businessSlug: string }>()
-  const { addToCart, business } = useStorefront()
+  const { addToCart, business, basePath } = useStorefront()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
 
   const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= product.lowStockThreshold
@@ -25,7 +24,7 @@ export function ProductCard({ product, className = '' }: ProductCardProps) {
   return (
     <div className={['group relative bg-white border border-sand rounded-[14px] overflow-hidden hover:shadow-md hover:border-sand-dark transition-all duration-200', className].join(' ')}>
       {/* Image */}
-      <Link to={`/store/${businessSlug}/product/${product.slug}`} className="block">
+      <Link to={`${basePath}/product/${product.slug}`} className="block">
         <div className="relative aspect-square overflow-hidden bg-ivory">
           {product.images[0] ? (
             <img
@@ -69,7 +68,7 @@ export function ProductCard({ product, className = '' }: ProductCardProps) {
       {/* Details */}
       <div className="p-4">
         <p className="text-[11.5px] text-slate mb-1">{product.categoryName}</p>
-        <Link to={`/store/${businessSlug}/product/${product.slug}`}>
+        <Link to={`${basePath}/product/${product.slug}`}>
           <h3 className="text-[14px] font-semibold text-ink leading-snug mb-2 hover:text-ink/70 transition-colors line-clamp-2">
             {product.name}
           </h3>

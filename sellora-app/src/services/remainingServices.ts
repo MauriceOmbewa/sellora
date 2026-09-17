@@ -609,3 +609,169 @@ export const messagesService = {
     return mapMessage(res.data)
   },
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHATSAPP  (#10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import type {
+  WaConversation, WaMessage, WaSettings,
+} from '@/types'
+
+// ── Raw API shapes ────────────────────────────────────────────────────────────
+
+interface WaMessageApi {
+  id: string
+  whatsapp_message_id: string
+  direction: string
+  message_type: string
+  body: string
+  media_url: string
+  media_mime_type: string
+  media_caption: string
+  status: string
+  sent_by_name: string
+  message_timestamp: string | null
+  created_at: string
+}
+
+interface WaConversationApi {
+  id: string
+  customer_phone: string
+  customer_name: string
+  status: string
+  unread_count: number
+  last_message_at: string | null
+  last_message_preview: string
+  service_window_active: boolean
+  service_window_seconds_left: number
+  service_window_expires_at: string | null
+  assigned_to_name: string
+  created_at: string
+  messages?: WaMessageApi[]
+}
+
+interface WaSettingsApi {
+  phone_number: string
+  phone_number_id: string
+  waba_id: string
+  webhook_verify_token: string
+  is_active: boolean
+  connected_at: string | null
+  access_token_hint: string
+}
+
+// ── Mappers ───────────────────────────────────────────────────────────────────
+
+function mapWaMessage(raw: WaMessageApi): WaMessage {
+  return {
+    id:               raw.id,
+    whatsappMessageId: raw.whatsapp_message_id,
+    direction:        raw.direction as WaMessage['direction'],
+    messageType:      raw.message_type as WaMessage['messageType'],
+    body:             raw.body,
+    mediaUrl:         raw.media_url,
+    mediaMimeType:    raw.media_mime_type,
+    mediaCaption:     raw.media_caption,
+    status:           raw.status as WaMessage['status'],
+    sentByName:       raw.sent_by_name,
+    messageTimestamp: raw.message_timestamp,
+    createdAt:        raw.created_at,
+  }
+}
+
+function mapWaConversation(raw: WaConversationApi): WaConversation {
+  return {
+    id:                        raw.id,
+    customerPhone:             raw.customer_phone,
+    customerName:              raw.customer_name,
+    status:                    raw.status as WaConversation['status'],
+    unreadCount:               raw.unread_count,
+    lastMessageAt:             raw.last_message_at,
+    lastMessagePreview:        raw.last_message_preview,
+    serviceWindowActive:       raw.service_window_active,
+    serviceWindowSecondsLeft:  raw.service_window_seconds_left,
+    serviceWindowExpiresAt:    raw.service_window_expires_at,
+    assignedToName:            raw.assigned_to_name,
+    createdAt:                 raw.created_at,
+    messages:                  raw.messages?.map(mapWaMessage),
+  }
+}
+
+function mapWaSettings(raw: WaSettingsApi): WaSettings {
+  return {
+    phoneNumber:       raw.phone_number,
+    phoneNumberId:     raw.phone_number_id,
+    wabaId:            raw.waba_id,
+    webhookVerifyToken: raw.webhook_verify_token,
+    isActive:          raw.is_active,
+    connectedAt:       raw.connected_at,
+    accessTokenHint:   raw.access_token_hint,
+  }
+}
+
+// ── Service ───────────────────────────────────────────────────────────────────
+
+export const whatsappService = {
+  /** GET /businesses/:id/whatsapp/conversations/ */
+  async getConversations(
+    businessId: string,
+    status?: string,
+    page = 1,
+  ): Promise<{ conversations: WaConversation[]; count: number }> {
+    const qs = new URLSearchParams({ page: String(page), page_size: '30' })
+    if (status) qs.set('status', status)
+    const res = await api.get<PaginatedEnvelope<WaConversationApi>>(
+      `/api/v1/businesses/${businessId}/whatsapp/conversations/?${qs}`,
+    )
+    return { conversations: res.results.map(mapWaConversation), count: res.count }
+  },
+
+  /** GET /businesses/:id/whatsapp/conversations/:conv_id/ */
+  async getConversation(businessId: string, conversationId: string): Promise<WaConversation> {
+    const res = await api.get<DataEnvelope<WaConversationApi>>(
+      `/api/v1/businesses/${businessId}/whatsapp/conversations/${conversationId}/`,
+    )
+    return mapWaConversation(res.data)
+  },
+
+  /** POST /businesses/:id/whatsapp/conversations/:conv_id/reply/ */
+  async reply(businessId: string, conversationId: string, body: string): Promise<WaMessage> {
+    const res = await api.post<DataEnvelope<WaMessageApi>>(
+      `/api/v1/businesses/${businessId}/whatsapp/conversations/${conversationId}/reply/`,
+      { body },
+    )
+    return mapWaMessage(res.data)
+  },
+
+  /** GET /businesses/:id/whatsapp/settings/ */
+  async getSettings(businessId: string): Promise<WaSettings | null> {
+    const res = await api.get<DataEnvelope<WaSettingsApi | null>>(
+      `/api/v1/businesses/${businessId}/whatsapp/settings/`,
+    )
+    return res.data ? mapWaSettings(res.data) : null
+  },
+
+  /** POST /businesses/:id/whatsapp/settings/ */
+  async saveSettings(
+    businessId: string,
+    payload: {
+      phone_number: string
+      phone_number_id: string
+      waba_id: string
+      access_token: string
+      webhook_verify_token: string
+    },
+  ): Promise<WaSettings> {
+    const res = await api.post<DataEnvelope<WaSettingsApi>>(
+      `/api/v1/businesses/${businessId}/whatsapp/settings/`,
+      payload,
+    )
+    return mapWaSettings(res.data)
+  },
+
+  /** DELETE /businesses/:id/whatsapp/settings/ */
+  async disconnect(businessId: string): Promise<void> {
+    await api.delete(`/api/v1/businesses/${businessId}/whatsapp/settings/`)
+  },
+}

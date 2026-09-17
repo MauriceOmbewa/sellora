@@ -375,6 +375,56 @@ export interface Message {
 }
 
 // ============================================================
+// WHATSAPP CONVERSATIONS
+// ============================================================
+
+export type WaMessageDirection = 'inbound' | 'outbound'
+export type WaMessageType = 'text' | 'image' | 'document' | 'audio' | 'video' | 'sticker' | 'template' | 'unknown'
+export type WaMessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'received'
+export type WaConversationStatus = 'open' | 'closed' | 'awaiting_reply'
+
+export interface WaMessage {
+  id: string
+  whatsappMessageId: string
+  direction: WaMessageDirection
+  messageType: WaMessageType
+  body: string
+  mediaUrl: string
+  mediaMimeType: string
+  mediaCaption: string
+  status: WaMessageStatus
+  sentByName: string
+  messageTimestamp: string | null
+  createdAt: string
+}
+
+export interface WaConversation {
+  id: string
+  customerPhone: string
+  customerName: string
+  status: WaConversationStatus
+  unreadCount: number
+  lastMessageAt: string | null
+  lastMessagePreview: string
+  serviceWindowActive: boolean
+  serviceWindowSecondsLeft: number
+  serviceWindowExpiresAt: string | null
+  assignedToName: string
+  createdAt: string
+  messages?: WaMessage[]
+}
+
+export interface WaSettings {
+  phoneNumber: string
+  phoneNumberId: string
+  wabaId: string
+  webhookVerifyToken: string
+  isActive: boolean
+  connectedAt: string | null
+  accessTokenHint: string
+}
+
+// ============================================================
 // NOTIFICATIONS / TOAST
 // ============================================================
 

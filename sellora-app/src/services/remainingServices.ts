@@ -774,4 +774,21 @@ export const whatsappService = {
   async disconnect(businessId: string): Promise<void> {
     await api.delete(`/api/v1/businesses/${businessId}/whatsapp/settings/`)
   },
+
+  /**
+   * POST /businesses/:id/whatsapp/connect/
+   * Called after the Meta Embedded Signup popup completes.
+   * Sends the code + waba_id + phone_number_id returned by the popup;
+   * the backend exchanges the code for a token and saves everything.
+   */
+  async connect(
+    businessId: string,
+    payload: { code: string; waba_id: string; phone_number_id: string },
+  ): Promise<WaSettings> {
+    const res = await api.post<DataEnvelope<WaSettingsApi>>(
+      `/api/v1/businesses/${businessId}/whatsapp/connect/`,
+      payload,
+    )
+    return mapWaSettings(res.data)
+  },
 }

@@ -101,50 +101,111 @@ export default function SettingsPage() {
   }
 
   // ── WhatsApp integration ──────────────────────────────────────────────────
-  const [waSettings, setWaSettings]   = useState<WaSettings | null>(null)
-  const [waLoading, setWaLoading]     = useState(false)
-  const [waSaving, setWaSaving]       = useState(false)
+  const [waSettings, setWaSettings]         = useState<WaSettings | null>(null)
+  const [waLoading, setWaLoading]           = useState(false)
+  const [waConnecting, setWaConnecting]     = useState(false)
   const [waDisconnecting, setWaDisconnecting] = useState(false)
-  const [waForm, setWaForm] = useState({
-    phone_number:        '',
-    phone_number_id:     '',
-    waba_id:             '',
-    access_token:        '',
-    webhook_verify_token: '',
-  })
 
+  // Load settings whenever the tab is opened (once per mount)
   useEffect(() => {
     if (activeTab !== 'whatsapp' || !currentBusiness || waSettings !== null) return
     setWaLoading(true)
     whatsappService.getSettings(currentBusiness.id)
-      .then(s => {
-        setWaSettings(s)
-        if (s) {
-          setWaForm({
-            phone_number:        s.phoneNumber,
-            phone_number_id:     s.phoneNumberId,
-            waba_id:             s.wabaId,
-            access_token:        '',           // never pre-fill the token
-            webhook_verify_token: s.webhookVerifyToken,
-          })
-        }
-      })
+      .then(s => setWaSettings(s))
       .catch(() => toast('error', 'Failed to load WhatsApp settings'))
       .finally(() => setWaLoading(false))
   }, [activeTab, currentBusiness?.id]) // eslint-disable-line
 
-  const handleSaveWhatsApp = async () => {
+  // Load the Meta JS SDK once (idempotent)
+  useEffect(() => {
+    if (document.getElementById('facebook-jssdk')) return
+    const script = document.createElement('script')
+    script.id  = 'facebook-jssdk'
+    script.src = 'https://connect.facebook.net/en_US/sdk.js'
+    script.async = true
+    script.defer = true
+    document.body.appendChild(script)
+    script.onload = () => {
+      const appId = import.meta.env.VITE_WHATSAPP_APP_ID ?? ''
+      if (!appId) return
+      ;(window as any).FB?.init({ appId, cookie: true, xfbml: true, version: 'v20.0' })
+    }
+  }, [])
+
+  const launchEmbeddedSignup = () => {
+    const FB = (window as any).FB
+    if (!FB) {
+      toast('error', 'Meta SDK not loaded', 'Please refresh the page and try again.')
+      return
+    }
+    setWaConnecting(true)
+
+    FB.login(
+      (response: any) => {
+        if (response.authResponse?.code) {
+          handleSignupComplete(response.authResponse)
+        } else {
+          setWaConnecting(false)
+          // User closed the popup without completing
+        }
+      },
+      {
+        config_id:      import.meta.env.VITE_WHATSAPP_CONFIG_ID ?? '',
+        response_type:  'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType:  '',
+          sessionInfoVersion: '3',
+        },
+      },
+    )
+
+    // Also listen for the sessionInfoListener message that carries waba_id + phone_number_id
+    const sessionHandler = (event: MessageEvent) => {
+      if (event.origin !== 'https://www.facebook.com' &&
+          event.origin !== 'https://web.facebook.com') return
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.event === 'FINISH') {
+            // Store on window so handleSignupComplete can pick them up
+            ;(window as any)._waSignupData = {
+              waba_id:         data.data?.waba_id ?? '',
+              phone_number_id: data.data?.phone_number_id ?? '',
+            }
+          }
+        }
+      } catch { /* non-JSON message — ignore */ }
+      window.removeEventListener('message', sessionHandler)
+    }
+    window.addEventListener('message', sessionHandler)
+  }
+
+  const handleSignupComplete = async (authResponse: any) => {
     if (!currentBusiness) return
-    setWaSaving(true)
+    const code           = authResponse.code as string
+    const signupData     = (window as any)._waSignupData ?? {}
+    const waba_id        = signupData.waba_id        ?? authResponse.waba_id        ?? ''
+    const phone_number_id = signupData.phone_number_id ?? authResponse.phone_number_id ?? ''
+
+    if (!waba_id || !phone_number_id) {
+      toast('error', 'Missing data from Meta', 'Could not get WABA ID or phone number. Please try again.')
+      setWaConnecting(false)
+      return
+    }
+
     try {
-      const saved = await whatsappService.saveSettings(currentBusiness.id, waForm)
+      const saved = await whatsappService.connect(currentBusiness.id, {
+        code, waba_id, phone_number_id,
+      })
       setWaSettings(saved)
-      setWaForm(f => ({ ...f, access_token: '' })) // clear token field after save
-      toast('success', 'WhatsApp connected', `+${saved.phoneNumber} is now active.`)
+      toast('success', 'WhatsApp connected!', `${saved.phoneNumber} is now receiving messages.`)
     } catch {
-      toast('error', 'Connection failed', 'Check your credentials and try again.')
+      toast('error', 'Connection failed', 'Please try again or contact support.')
     } finally {
-      setWaSaving(false)
+      setWaConnecting(false)
+      delete (window as any)._waSignupData
     }
   }
 
@@ -155,7 +216,6 @@ export default function SettingsPage() {
     try {
       await whatsappService.disconnect(currentBusiness.id)
       setWaSettings(null)
-      setWaForm({ phone_number: '', phone_number_id: '', waba_id: '', access_token: '', webhook_verify_token: '' })
       toast('success', 'WhatsApp disconnected')
     } catch {
       toast('error', 'Disconnect failed')
@@ -324,136 +384,158 @@ export default function SettingsPage() {
       )}
 
       {/* ── WhatsApp ──────────────────────────────────────────────────────── */}
+      {/* WhatsApp tab */}
       {activeTab === 'whatsapp' && (
-        <div className="space-y-5 max-w-2xl">
-          {/* Status card */}
+        <div className="space-y-5 max-w-xl">
+
+          {/* Connection status card */}
           <div className={[
-            'rounded-[14px] border p-5 flex items-start justify-between gap-4',
-            waSettings?.isActive
-              ? 'bg-green-light border-green/20'
-              : 'bg-white border-sand',
+            'rounded-[14px] border p-5',
+            waSettings?.isActive ? 'bg-green-light border-green/20' : 'bg-white border-sand',
           ].join(' ')}>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className={['w-2.5 h-2.5 rounded-full shrink-0', waSettings?.isActive ? 'bg-green' : 'bg-sand-dark'].join(' ')} />
-                <p className="font-semibold text-ink text-[14px]">
-                  {waSettings?.isActive ? 'Connected' : 'Not connected'}
-                </p>
-              </div>
-              {waSettings?.isActive ? (
-                <div className="space-y-0.5 text-[13px] text-ink-soft">
-                  <p>Number: <span className="font-medium text-ink">{waSettings.phoneNumber}</span></p>
-                  <p>Token: <span className="font-mono text-[12px]">{waSettings.accessTokenHint}</span></p>
-                  {waSettings.connectedAt && (
-                    <p>Since {new Date(waSettings.connectedAt).toLocaleDateString('en-KE')}</p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className={[
+                  'w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-[22px]',
+                  waSettings?.isActive ? 'bg-green/20' : 'bg-sand',
+                ].join(' ')}>
+                  💬
+                </div>
+                <div>
+                  <p className="font-semibold text-ink text-[15px] flex items-center gap-2">
+                    WhatsApp Business
+                    {waSettings?.isActive && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green bg-green/10 px-2 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 bg-green rounded-full" />
+                        Connected
+                      </span>
+                    )}
+                  </p>
+                  {waSettings?.isActive ? (
+                    <div className="mt-1 space-y-0.5 text-[13px] text-ink-soft">
+                      <p>
+                        <span className="text-slate">Number: </span>
+                        <span className="font-semibold text-ink">{waSettings.phoneNumber}</span>
+                      </p>
+                      {waSettings.connectedAt && (
+                        <p className="text-[12px] text-slate">
+                          Connected {new Date(waSettings.connectedAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-slate mt-0.5">
+                      Connect your WhatsApp Business number to receive and reply to customer messages right here.
+                    </p>
                   )}
                 </div>
-              ) : (
-                <p className="text-[13px] text-slate">Enter your Meta credentials below to connect.</p>
-              )}
-            </div>
-            {waSettings?.isActive && (
-              <button onClick={handleDisconnectWhatsApp} disabled={waDisconnecting}
-                className="text-[12.5px] font-semibold text-red hover:underline shrink-0 disabled:opacity-50">
-                {waDisconnecting ? 'Disconnecting…' : 'Disconnect'}
-              </button>
-            )}
-          </div>
-
-          {waLoading ? (
-            <div className="space-y-4">
-              {[1,2,3,4,5].map(i => <Skeleton key={i} height={48} className="rounded-[10px]" />)}
-            </div>
-          ) : (
-            <div className="bg-white border border-sand rounded-[14px] p-5 space-y-5">
-              <h3 className="font-serif text-[17px] font-medium text-ink">API credentials</h3>
-              <p className="text-[13px] text-slate -mt-2">
-                Get these from your{' '}
-                <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer"
-                  className="text-ink underline underline-offset-2 hover:text-gold">
-                  Meta Developer App
-                </a>{' '}
-                → WhatsApp → API Setup.
-              </p>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <Input
-                  label="Phone Number (E.164)"
-                  placeholder="+254712345678"
-                  value={waForm.phone_number}
-                  onChange={e => setWaForm(f => ({ ...f, phone_number: e.target.value }))}
-                />
-                <Input
-                  label="Phone Number ID"
-                  placeholder="1234567890123"
-                  value={waForm.phone_number_id}
-                  onChange={e => setWaForm(f => ({ ...f, phone_number_id: e.target.value }))}
-                />
               </div>
 
-              <Input
-                label="WhatsApp Business Account ID (WABA ID)"
-                placeholder="9876543210123"
-                value={waForm.waba_id}
-                onChange={e => setWaForm(f => ({ ...f, waba_id: e.target.value }))}
-              />
+              {waSettings?.isActive && (
+                <button
+                  onClick={handleDisconnectWhatsApp}
+                  disabled={waDisconnecting}
+                  className="text-[12.5px] font-semibold text-red hover:underline shrink-0 disabled:opacity-50 mt-0.5"
+                >
+                  {waDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+                </button>
+              )}
+            </div>
+          </div>
 
-              <Input
-                label="Access Token"
-                type="password"
-                placeholder={waSettings?.isActive ? `Current: ${waSettings.accessTokenHint} — paste new to update` : 'EAAxxxxxxxx...'}
-                value={waForm.access_token}
-                onChange={e => setWaForm(f => ({ ...f, access_token: e.target.value }))}
-                helpText="Permanent system-user token from your Meta App. Stored securely."
-              />
-
-              <Input
-                label="Webhook Verify Token"
-                placeholder="my-secret-verify-token-123"
-                value={waForm.webhook_verify_token}
-                onChange={e => setWaForm(f => ({ ...f, webhook_verify_token: e.target.value }))}
-                helpText="A random string you choose. Copy this into Meta App → Webhooks → Verify Token."
-              />
-
-              <div className="pt-1 border-t border-sand">
-                <p className="text-[12.5px] text-slate mb-3 font-medium">Webhook URL to paste in Meta</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-ivory rounded-[8px] px-3 py-2 text-[12px] font-mono text-ink border border-sand truncate select-all">
-                    {(import.meta.env.VITE_API_BASE_URL ?? 'https://your-api-domain.com')}/api/v1/webhooks/whatsapp/
-                  </code>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${import.meta.env.VITE_API_BASE_URL ?? 'https://your-api-domain.com'}/api/v1/webhooks/whatsapp/`
-                      )
-                      toast('success', 'Copied!')
-                    }}
-                    className="px-3 py-2 text-[12.5px] font-semibold border border-sand rounded-[8px] hover:border-ink text-ink transition-colors shrink-0"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <p className="text-[12px] text-slate mt-2">
-                  Subscribe to <span className="font-mono">messages</span> under Webhook Fields in your Meta App.
+          {/* Connect / loaded */}
+          {waLoading ? (
+            <div className="space-y-3">
+              <Skeleton height={52} className="rounded-[12px]" />
+              <Skeleton height={80} className="rounded-[12px]" />
+            </div>
+          ) : !waSettings?.isActive ? (
+            <div className="bg-white border border-sand rounded-[14px] p-6 space-y-5">
+              <div>
+                <h3 className="font-serif text-[17px] font-medium text-ink">Connect your number</h3>
+                <p className="text-[13.5px] text-slate mt-1.5 leading-relaxed">
+                  Click the button below. A Meta window will open where you log in with
+                  Facebook and select your WhatsApp Business number. No API keys, no copying credentials.
                 </p>
               </div>
 
-              <div className="flex justify-end">
-                <Button
-                  variant="primary"
-                  loading={waSaving}
-                  onClick={handleSaveWhatsApp}
-                  disabled={
-                    !waForm.phone_number ||
-                    !waForm.phone_number_id ||
-                    !waForm.waba_id ||
-                    !waForm.webhook_verify_token ||
-                    (!waForm.access_token && !waSettings?.isActive)
-                  }
-                >
-                  {waSettings?.isActive ? 'Update credentials' : 'Connect WhatsApp'}
-                </Button>
+              <div className="space-y-2.5">
+                {[
+                  { n: '1', text: 'Click "Connect with WhatsApp"' },
+                  { n: '2', text: 'Log in with your Facebook account' },
+                  { n: '3', text: 'Select or register your WhatsApp Business number' },
+                  { n: '4', text: 'Confirm with a one-time code — done' },
+                ].map(s => (
+                  <div key={s.n} className="flex items-center gap-3 text-[13.5px] text-ink-soft">
+                    <span className="w-6 h-6 rounded-full bg-sand text-ink font-bold text-[12px] flex items-center justify-center shrink-0">
+                      {s.n}
+                    </span>
+                    {s.text}
+                  </div>
+                ))}
               </div>
+
+              <button
+                onClick={launchEmbeddedSignup}
+                disabled={waConnecting}
+                className={[
+                  'w-full flex items-center justify-center gap-3 py-3.5 rounded-[11px]',
+                  'font-semibold text-[14.5px] transition-all',
+                  waConnecting
+                    ? 'bg-sand text-slate cursor-not-allowed'
+                    : 'bg-[#1877F2] hover:bg-[#1565d8] text-white shadow-sm hover:shadow-md',
+                ].join(' ')}
+              >
+                {waConnecting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-slate border-t-transparent rounded-full animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 shrink-0">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                    Connect with WhatsApp
+                  </>
+                )}
+              </button>
+
+              <p className="text-[12px] text-slate text-center">
+                Your number stays yours. Sellora gets permission to send and receive messages on your behalf.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white border border-sand rounded-[14px] p-5 space-y-4">
+              <h3 className="font-serif text-[16px] font-medium text-ink">Active integration</h3>
+              <div className="grid sm:grid-cols-2 gap-3 text-[13px]">
+                <div className="bg-ivory rounded-[10px] p-3">
+                  <p className="text-slate text-[11.5px] font-semibold uppercase tracking-wide mb-0.5">Phone Number</p>
+                  <p className="font-semibold text-ink">{waSettings.phoneNumber}</p>
+                </div>
+                <div className="bg-ivory rounded-[10px] p-3">
+                  <p className="text-slate text-[11.5px] font-semibold uppercase tracking-wide mb-0.5">WABA ID</p>
+                  <p className="font-mono text-ink text-[12px]">{waSettings.wabaId}</p>
+                </div>
+                <div className="bg-ivory rounded-[10px] p-3">
+                  <p className="text-slate text-[11.5px] font-semibold uppercase tracking-wide mb-0.5">Phone Number ID</p>
+                  <p className="font-mono text-ink text-[12px]">{waSettings.phoneNumberId}</p>
+                </div>
+                <div className="bg-ivory rounded-[10px] p-3">
+                  <p className="text-slate text-[11.5px] font-semibold uppercase tracking-wide mb-0.5">Access Token</p>
+                  <p className="font-mono text-ink text-[12px]">{waSettings.accessTokenHint}</p>
+                </div>
+              </div>
+              <p className="text-[13px] text-slate pt-1">
+                Need to switch numbers?{' '}
+                <button
+                  onClick={launchEmbeddedSignup}
+                  disabled={waConnecting}
+                  className="text-ink font-semibold hover:underline disabled:opacity-50"
+                >
+                  {waConnecting ? 'Connecting...' : 'Re-connect'}
+                </button>
+              </p>
             </div>
           )}
         </div>

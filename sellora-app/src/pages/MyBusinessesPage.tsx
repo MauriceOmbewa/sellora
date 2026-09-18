@@ -21,7 +21,10 @@ const categoryLabels: Record<string, string> = {
 
 function BusinessCard({ biz, onOpen, onDelete }: { biz: Business; onOpen: () => void; onDelete: () => void }) {
   return (
-    <div className="bg-white border border-sand rounded-[16px] p-6 flex flex-col hover:border-ink/30 hover:-translate-y-0.5 transition-all duration-150">
+    <div
+      onClick={onOpen}
+      className="bg-white border border-sand rounded-[16px] p-6 flex flex-col hover:border-ink/30 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-150 cursor-pointer"
+    >
       {/* Header row: avatar · spacer · delete + owner badge */}
       <div className="flex items-start justify-between mb-5">
         <div
@@ -67,13 +70,10 @@ function BusinessCard({ biz, onOpen, onDelete }: { biz: Business; onOpen: () => 
         </div>
       </div>
 
-      <button
-        onClick={onOpen}
-        className="flex items-center justify-between text-[13.5px] font-semibold text-ink mt-auto hover:text-ink/70 transition-colors focus-visible:outline-2 focus-visible:outline-gold rounded-[4px]"
-      >
+      <div className="flex items-center justify-between text-[13.5px] font-semibold text-ink mt-auto">
         <span>Open dashboard</span>
         <ArrowRight size={15} />
-      </button>
+      </div>
     </div>
   )
 }

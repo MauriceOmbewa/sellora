@@ -71,6 +71,31 @@ h1, h2, h3 {
   outline-offset: 2px;
 }
 
+/* ── Cursor pointer on all interactive elements ──────── */
+a,
+button,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+[role="checkbox"],
+[role="radio"],
+[role="switch"],
+label[for],
+select,
+summary,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="file"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+input[type="color"] {
+  cursor: pointer;
+}
+
 /* ── Link / button transitions ───────────────────────── */
 a, button { transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, transform 0.15s ease; }
 

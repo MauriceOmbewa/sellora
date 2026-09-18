@@ -1,5 +1,5 @@
-import React, { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import React, { Suspense, lazy, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ToastProvider } from '@/components/ui'
 import { MarketingLayout } from '@/components/layouts/MarketingLayout'
@@ -80,6 +80,16 @@ function getStorefrontSlug(): string | null {
   }
 
   return null  // Not a storefront subdomain — render the admin SaaS app
+}
+
+// ── Scroll to top on every route change ──────────────────────────────────────
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [pathname])
+  return null
 }
 
 // ── Page loader ───────────────────────────────────────────────────────────────
@@ -228,6 +238,7 @@ function AppContent() {
   if (storefrontSlug) {
     return (
       <BrowserRouter>
+        <ScrollToTop />
         <StorefrontRoutes slug={storefrontSlug} />
       </BrowserRouter>
     )
@@ -236,6 +247,7 @@ function AppContent() {
   // Standard admin SaaS routing
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AdminRoutes />
     </BrowserRouter>
   )

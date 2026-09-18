@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { PageHeader, Button, Input, Select, useToast, ConfirmModal, Skeleton } from '@/components/ui'
+import { useEffect, useState, useCallback } from 'react'
+import { Plus, Trash2, X } from 'lucide-react'
+import { PageHeader, Button, Input, Select, SearchInput, useToast, ConfirmModal, Skeleton } from '@/components/ui'
 import { financesService } from '@/services/remainingServices'
 import { useAuth } from '@/context/AuthContext'
 import type { Expense } from '@/types'
@@ -8,6 +8,7 @@ import type { Expense } from '@/types'
 type Period = '7d' | '30d' | '90d' | 'all'
 
 const EXPENSE_CATEGORIES = [
+  { value: '',                label: 'All categories' },
   { value: 'stock_purchases', label: 'Stock purchases' },
   { value: 'staff_salaries',  label: 'Staff salaries' },
   { value: 'rent_utilities',  label: 'Rent & utilities' },
@@ -17,8 +18,15 @@ const EXPENSE_CATEGORIES = [
   { value: 'other',           label: 'Other' },
 ]
 
+// Categories without the "All" option — for the add modal
+const ADD_CATEGORIES = EXPENSE_CATEGORIES.slice(1)
+
 const fmtK = (n: number) =>
   `KSh ${n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString()}`
+
+function catLabel(val: string) {
+  return EXPENSE_CATEGORIES.find(c => c.value === val)?.label ?? val.replace('_', ' ')
+}
 
 // ── Add expense modal ─────────────────────────────────────────────────────────
 function AddExpenseModal({
@@ -64,7 +72,7 @@ function AddExpenseModal({
         <h2 className="font-serif text-[18px] font-medium text-ink">Add expense</h2>
         <Select
           label="Category"
-          options={EXPENSE_CATEGORIES}
+          options={ADD_CATEGORIES}
           value={form.category}
           onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
         />
@@ -110,14 +118,16 @@ export default function ExpensesPage() {
   const { currentBusiness } = useAuth()
   const { toast }           = useToast()
 
-  const [period, setPeriod]         = useState<Period>('30d')
-  const [expenses, setExpenses]     = useState<Expense[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [showAdd, setShowAdd]       = useState(false)
+  const [period, setPeriod]             = useState<Period>('30d')
+  const [search, setSearch]             = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [expenses, setExpenses]         = useState<Expense[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [showAdd, setShowAdd]           = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null)
-  const [deleting, setDeleting]     = useState(false)
+  const [deleting, setDeleting]         = useState(false)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!currentBusiness) return
     setLoading(true)
     financesService.getExpenses(currentBusiness.id, period === 'all' ? '90d' : period)
@@ -125,6 +135,8 @@ export default function ExpensesPage() {
       .catch(() => toast('error', 'Failed to load expenses'))
       .finally(() => setLoading(false))
   }, [currentBusiness?.id, period]) // eslint-disable-line
+
+  useEffect(() => { load() }, [load])
 
   const handleDelete = async () => {
     if (!deleteTarget || !currentBusiness) return
@@ -141,13 +153,21 @@ export default function ExpensesPage() {
     }
   }
 
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
-
-  // Group by category for the summary strip
-  const byCategory: Record<string, number> = {}
-  expenses.forEach(e => {
-    byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount
+  // Client-side filter (search + category) — expenses list is already period-filtered
+  const filtered = expenses.filter(e => {
+    const matchSearch = !search ||
+      e.description.toLowerCase().includes(search.toLowerCase()) ||
+      catLabel(e.category).toLowerCase().includes(search.toLowerCase())
+    const matchCat = !categoryFilter || e.category === categoryFilter
+    return matchSearch && matchCat
   })
+
+  const totalExpenses  = filtered.reduce((s, e) => s + e.amount, 0)
+  const hasFilters     = search || categoryFilter
+
+  // Largest category (from full unfiltered list)
+  const byCategory: Record<string, number> = {}
+  expenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount })
   const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]
 
   return (
@@ -157,69 +177,148 @@ export default function ExpensesPage() {
         subtitle="Log and track your operating costs"
         breadcrumb={[{ label: 'Finances', href: '/app/finances' }, { label: 'Expenses' }]}
         actions={
-          <div className="flex gap-3">
-            <div className="flex gap-1 bg-ivory border border-sand rounded-[9px] p-1">
-              {(['7d', '30d', '90d', 'all'] as Period[]).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={[
-                    'px-3 py-1.5 text-[12.5px] font-semibold rounded-[7px] transition-colors',
-                    period === p ? 'bg-white text-ink shadow-sm' : 'text-slate hover:text-ink',
-                  ].join(' ')}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <Button variant="primary" icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
-              Add expense
-            </Button>
-          </div>
+          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
+            Add expense
+          </Button>
         }
       />
 
       {/* Summary strip */}
-      {!loading && expenses.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: `Total (${period})`,   value: fmtK(totalExpenses) },
-            { label: 'Transactions',         value: expenses.length.toString() },
-            { label: 'Largest category',     value: topCategory ? EXPENSE_CATEGORIES.find(c => c.value === topCategory[0])?.label ?? topCategory[0] : '—', sub: topCategory ? fmtK(topCategory[1]) : undefined },
-          ].map(card => (
-            <div key={card.label} className="bg-white border border-sand rounded-[14px] p-4">
-              <p className="text-[12px] font-medium text-slate uppercase tracking-wide mb-2">{card.label}</p>
-              <p className="font-serif text-[20px] font-semibold text-ink">{card.value}</p>
-              {card.sub && <p className="text-[12px] text-slate mt-0.5">{card.sub}</p>}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          {
+            label:     `Total (${period})`,
+            value:     fmtK(expenses.reduce((s, e) => s + e.amount, 0)),
+            highlight: true,
+          },
+          {
+            label: 'Transactions',
+            value: expenses.length.toString(),
+          },
+          {
+            label: 'Largest category',
+            value: topCategory ? catLabel(topCategory[0]) : '—',
+            sub:   topCategory ? fmtK(topCategory[1]) : undefined,
+          },
+        ].map(card => (
+          <div
+            key={card.label}
+            className={[
+              'rounded-[14px] p-4',
+              card.highlight ? 'bg-ink text-ivory' : 'bg-white border border-sand',
+            ].join(' ')}
+          >
+            <p className={[
+              'text-[12px] font-medium uppercase tracking-wide mb-2',
+              card.highlight ? 'text-ivory/60' : 'text-slate',
+            ].join(' ')}>
+              {card.label}
+            </p>
+            <p className={[
+              'font-serif text-[22px] font-semibold',
+              card.highlight ? 'text-ivory' : 'text-ink',
+            ].join(' ')}>
+              {loading ? '—' : card.value}
+            </p>
+            {card.sub && !loading && (
+              <p className="text-[12px] text-slate mt-0.5">{card.sub}</p>
+            )}
+          </div>
+        ))}
+      </div>
 
-      {/* Expenses table */}
-      <div className="bg-white border border-sand rounded-[14px] p-5">
-        <h3 className="font-serif text-[17px] font-medium text-ink mb-4">All expenses</h3>
+      {/* ── Filter bar — same layout as Income page ─────────────────────── */}
+      <div className="bg-white border border-sand rounded-[14px] p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
+          <div className="flex-1">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search description or category…"
+            />
+          </div>
+
+          {/* Period */}
+          <div className="flex gap-1 bg-ivory border border-sand rounded-[9px] p-1 shrink-0">
+            {(['7d', '30d', '90d', 'all'] as Period[]).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={[
+                  'px-3 py-1.5 text-[12px] font-semibold rounded-[7px] transition-colors',
+                  period === p ? 'bg-white text-ink shadow-sm' : 'text-slate hover:text-ink',
+                ].join(' ')}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+
+          {/* Category filter */}
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="shrink-0 h-[38px] px-3 rounded-[9px] border border-sand bg-ivory text-[13px] text-ink font-medium focus:outline-none focus:border-ink/30"
+          >
+            {EXPENSE_CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Active filter chips */}
+        {hasFilters && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {search && (
+              <span className="inline-flex items-center gap-1.5 text-[12px] bg-ink/6 border border-ink/10 text-ink px-2.5 py-1 rounded-full">
+                "{search}"
+                <button onClick={() => setSearch('')}><X size={11} /></button>
+              </span>
+            )}
+            {categoryFilter && (
+              <span className="inline-flex items-center gap-1.5 text-[12px] bg-ink/6 border border-ink/10 text-ink px-2.5 py-1 rounded-full">
+                {catLabel(categoryFilter)}
+                <button onClick={() => setCategoryFilter('')}><X size={11} /></button>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Expenses table ────────────────────────────────────────────────── */}
+      <div className="bg-white border border-sand rounded-[14px] overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-sand flex items-center justify-between">
+          <h3 className="font-serif text-[16px] font-medium text-ink">All expenses</h3>
+          <p className="text-[12.5px] text-slate">
+            {loading ? '—' : `${filtered.length.toLocaleString()} entries`}
+          </p>
+        </div>
 
         {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => <Skeleton key={i} height={44} className="rounded-[8px]" />)}
+          <div className="p-5 space-y-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} height={52} className="rounded-[8px]" />)}
           </div>
-        ) : expenses.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <p className="text-[14px] text-slate">No expenses for this period.</p>
-            <Button variant="outline" icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
-              Add first expense
-            </Button>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 gap-3">
+            <p className="text-[14px] text-slate font-medium">
+              {hasFilters ? 'No expenses match your filters.' : 'No expenses for this period.'}
+            </p>
+            {!hasFilters && (
+              <Button variant="outline" icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>
+                Add first expense
+              </Button>
+            )}
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full min-w-[500px]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px]">
               <thead>
-                <tr className="border-b border-sand">
+                <tr className="border-b border-sand bg-ivory/50">
                   {['Date', 'Category', 'Description', 'Amount', ''].map(h => (
                     <th
                       key={h}
-                      className="text-left text-[11px] font-semibold text-slate pb-3 pr-4 uppercase tracking-wide"
+                      className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate uppercase tracking-wide"
                     >
                       {h}
                     </th>
@@ -227,17 +326,18 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody>
-                {expenses.map(exp => (
-                  <tr key={exp.id} className="border-b border-sand last:border-0 group hover:bg-ivory/60 transition-colors">
-                    <td className="py-3.5 pr-4 text-[12.5px] text-slate whitespace-nowrap">{exp.date}</td>
-                    <td className="py-3.5 pr-4 text-[13px] text-slate capitalize">
-                      {EXPENSE_CATEGORIES.find(c => c.value === exp.category)?.label ?? exp.category.replace('_', ' ')}
-                    </td>
-                    <td className="py-3.5 pr-4 text-[13.5px] font-medium text-ink">{exp.description}</td>
-                    <td className="py-3.5 pr-4 text-[13.5px] font-semibold text-red">
+                {filtered.map(exp => (
+                  <tr
+                    key={exp.id}
+                    className="border-b border-sand/60 last:border-0 hover:bg-ivory/60 transition-colors group"
+                  >
+                    <td className="px-4 py-3.5 text-[12.5px] text-slate whitespace-nowrap">{exp.date}</td>
+                    <td className="px-4 py-3.5 text-[13px] text-slate">{catLabel(exp.category)}</td>
+                    <td className="px-4 py-3.5 text-[13.5px] font-medium text-ink">{exp.description}</td>
+                    <td className="px-4 py-3.5 text-[13.5px] font-semibold text-red whitespace-nowrap">
                       −{fmtK(exp.amount)}
                     </td>
-                    <td className="py-3.5">
+                    <td className="px-4 py-3.5">
                       <button
                         onClick={() => setDeleteTarget(exp)}
                         className="p-1.5 text-slate hover:text-red hover:bg-red-light rounded-[6px] opacity-0 group-hover:opacity-100 transition-all"
@@ -250,8 +350,10 @@ export default function ExpensesPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-sand">
-                  <td colSpan={3} className="py-3 pr-4 font-bold text-ink text-[13.5px]">Total</td>
-                  <td className="py-3 font-bold text-red text-[13.5px]">−{fmtK(totalExpenses)}</td>
+                  <td colSpan={3} className="px-4 py-3 font-bold text-ink text-[13.5px]">Total</td>
+                  <td className="px-4 py-3 font-bold text-red text-[13.5px] whitespace-nowrap">
+                    −{fmtK(totalExpenses)}
+                  </td>
                   <td />
                 </tr>
               </tfoot>

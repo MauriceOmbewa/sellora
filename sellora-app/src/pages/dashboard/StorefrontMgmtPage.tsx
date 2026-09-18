@@ -29,6 +29,11 @@ import {
 } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { businessService } from '@/services/businessService'
+import {
+  paymentService,
+  type PaymentConfiguration,
+} from '@/services/paymentService'
+import { ApiError } from '@/services/api'
 import type { StorefrontSettings } from '@/types'
 
 type ViewportSize = 'desktop' | 'tablet' | 'mobile'
@@ -300,11 +305,19 @@ export default function StorefrontMgmtPage() {
   const [sfLoading, setSfLoading] = useState(false)
 
   // ── Payment state ──────────────────────────────────────────────────────────
+
   const [mpesaPaymentMethod, setMpesaPaymentMethod] =
     useState<MpesaPaymentMethod>(null)
 
   // Controls whether the M-Pesa provider section is expanded.
   const [mpesaOpen, setMpesaOpen] = useState(false)
+
+  // Saved backend payment configuration.
+  const [paymentConfiguration, setPaymentConfiguration] =
+    useState<PaymentConfiguration | null>(null)
+
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [paymentSaving, setPaymentSaving] = useState(false)
 
   const [paymentForm, setPaymentForm] = useState({
     paybillNumber: '',
@@ -415,6 +428,74 @@ export default function StorefrontMgmtPage() {
       .finally(() => setSfLoading(false))
   }, [currentBusiness?.id])
 
+  // ── Load payment configuration ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!currentBusiness) return
+
+    setPaymentLoading(true)
+
+    paymentService
+      .getConfiguration(currentBusiness.id)
+      .then(configuration => {
+        setPaymentConfiguration(configuration)
+
+        if (configuration.method === 'paybill') {
+          setMpesaPaymentMethod('paybill')
+
+          setPaymentForm(prev => ({
+            ...prev,
+            paybillNumber:
+              configuration.paybill_number ?? '',
+            paybillAccountNumber:
+              configuration.paybill_account_reference ?? '',
+            tillNumber: '',
+          }))
+        } else if (configuration.method === 'till') {
+          setMpesaPaymentMethod('till')
+
+          setPaymentForm(prev => ({
+            ...prev,
+            paybillNumber: '',
+            paybillAccountNumber: '',
+            tillNumber:
+              configuration.till_number ?? '',
+          }))
+        }
+      })
+      .catch((err: unknown) => {
+        // 404 means the business has not configured
+        // a payment method yet.
+        if (
+          err instanceof ApiError &&
+          err.status === 404
+        ) {
+          setPaymentConfiguration(null)
+          setMpesaPaymentMethod(null)
+
+          setPaymentForm(prev => ({
+            ...prev,
+            paybillNumber: '',
+            paybillAccountNumber: '',
+            tillNumber: '',
+          }))
+
+          return
+        }
+
+        toast(
+          'error',
+          'Payment settings could not be loaded',
+          err instanceof Error
+            ? err.message
+            : 'Please try again.'
+        )
+      })
+      .finally(() => {
+        setPaymentLoading(false)
+      })
+  }, [currentBusiness?.id])
+
   // ── Save all changes ───────────────────────────────────────────────────────
 
   const handleSave = async () => {
@@ -457,7 +538,8 @@ export default function StorefrontMgmtPage() {
         social_links: {
           instagram:
             socialForm.instagram || undefined,
-          tiktok: socialForm.tiktok || undefined,
+          tiktok:
+            socialForm.tiktok || undefined,
           facebook:
             socialForm.facebook || undefined,
           twitter:
@@ -487,9 +569,11 @@ export default function StorefrontMgmtPage() {
     }
   }
 
-  // ── Save payment settings ─────────────────────────────────────────────────
+  // ── Save payment settings ──────────────────────────────────────────────────
 
-  const handleSavePayments = () => {
+  const handleSavePayments = async () => {
+    if (!currentBusiness) return
+
     if (!mpesaPaymentMethod) {
       toast(
         'error',
@@ -499,31 +583,7 @@ export default function StorefrontMgmtPage() {
       return
     }
 
-    if (
-      mpesaPaymentMethod === 'paybill' &&
-      (!paymentForm.paybillNumber ||
-        !paymentForm.paybillAccountNumber)
-    ) {
-      toast(
-        'error',
-        'PayBill details required',
-        'Enter both your PayBill number and account number.'
-      )
-      return
-    }
-
-    if (
-      mpesaPaymentMethod === 'till' &&
-      !paymentForm.tillNumber
-    ) {
-      toast(
-        'error',
-        'Till number required',
-        'Enter your M-Pesa Till Number.'
-      )
-      return
-    }
-
+    // Pochi and Send Money remain frontend-only for now.
     if (
       mpesaPaymentMethod === 'pochi' &&
       !paymentForm.pochiNumber
@@ -548,11 +608,121 @@ export default function StorefrontMgmtPage() {
       return
     }
 
-    toast(
-      'success',
-      'Payment method selected',
-      'Your M-Pesa payment configuration is ready to be connected to the backend.'
-    )
+    // PayBill validation
+    if (
+      mpesaPaymentMethod === 'paybill' &&
+      (!paymentForm.paybillNumber ||
+        !paymentForm.paybillAccountNumber)
+    ) {
+      toast(
+        'error',
+        'PayBill details required',
+        'Enter both your PayBill number and account number.'
+      )
+      return
+    }
+
+    // Till validation
+    if (
+      mpesaPaymentMethod === 'till' &&
+      !paymentForm.tillNumber
+    ) {
+      toast(
+        'error',
+        'Till number required',
+        'Enter your M-Pesa Till Number.'
+      )
+      return
+    }
+
+    // Pochi and Send Money are not connected
+    // to the backend yet.
+    if (
+      mpesaPaymentMethod === 'pochi' ||
+      mpesaPaymentMethod === 'send_money'
+    ) {
+      toast(
+        'success',
+        'Payment method selected',
+        'This payment method is currently saved on this page only.'
+      )
+      return
+    }
+
+    setPaymentSaving(true)
+
+    try {
+      if (mpesaPaymentMethod === 'paybill') {
+        const data = {
+          provider: 'mpesa' as const,
+          method: 'paybill' as const,
+          paybill_number:
+            paymentForm.paybillNumber,
+          paybill_account_reference:
+            paymentForm.paybillAccountNumber,
+          till_number: '',
+        }
+
+        const configuration =
+          paymentConfiguration
+            ? await paymentService.updateConfiguration(
+                currentBusiness.id,
+                data
+              )
+            : await paymentService.createConfiguration(
+                currentBusiness.id,
+                data
+              )
+
+        setPaymentConfiguration(configuration)
+
+        toast(
+          'success',
+          'Payment settings saved',
+          'Your M-Pesa PayBill configuration has been saved.'
+        )
+      }
+
+      if (mpesaPaymentMethod === 'till') {
+        const data = {
+          provider: 'mpesa' as const,
+          method: 'till' as const,
+          paybill_number: '',
+          paybill_account_reference: '',
+          till_number:
+            paymentForm.tillNumber,
+        }
+
+        const configuration =
+          paymentConfiguration
+            ? await paymentService.updateConfiguration(
+                currentBusiness.id,
+                data
+              )
+            : await paymentService.createConfiguration(
+                currentBusiness.id,
+                data
+              )
+
+        setPaymentConfiguration(configuration)
+
+        toast(
+          'success',
+          'Payment settings saved',
+          'Your M-Pesa Till Number configuration has been saved.'
+        )
+      }
+    } catch (err: unknown) {
+      toast(
+        'error',
+        'Payment settings failed',
+        err instanceof Error
+          ? err.message
+          : 'Please try again.'
+      )
+    } finally {
+      setPaymentSaving(false)
+    }
   }
 
   // ── Publish ───────────────────────────────────────────────────────────────
@@ -1112,6 +1282,13 @@ export default function StorefrontMgmtPage() {
       {activeTab === 'payments' && (
         <div className="space-y-5">
 
+          {/* Payment loading */}
+          {paymentLoading && (
+            <div className="bg-sand/40 border border-sand rounded-[10px] px-4 py-3 text-[12px] text-slate">
+              Loading payment configuration...
+            </div>
+          )}
+
           {/* Header */}
           <div className="bg-ink rounded-[14px] p-5 text-ivory">
             <div className="flex items-start gap-3">
@@ -1563,6 +1740,7 @@ export default function StorefrontMgmtPage() {
 
             <Button
               variant="secondary"
+              loading={paymentSaving}
               onClick={handleSavePayments}
             >
               Save Payment Settings

@@ -336,6 +336,17 @@ export interface AnalyticsSummary {
   customerGrowth: CustomerGrowthPoint[]
 }
 
+export interface MonthlyDataPoint {
+  month: number          // 1–12
+  monthName: string      // 'Jan' … 'Dec'
+  revenue: number
+  expenses: number
+  netProfit: number
+  orders: number
+}
+  customerGrowth: CustomerGrowthPoint[]
+}
+
 // ============================================================
 // CART (STOREFRONT)
 // ============================================================

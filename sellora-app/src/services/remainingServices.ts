@@ -6,7 +6,7 @@
 import { api } from './api'
 import type {
   InventoryItem, StockAdjustment, Customer, Order, OrderStatus,
-  AnalyticsSummary, RevenueDataPoint, ProductPerformance,
+  AnalyticsSummary, RevenueDataPoint, ProductPerformance, MonthlyDataPoint,
   CategoryPerformance, CustomerGrowthPoint, Message, MessageStatus,
   FinanceSummary, Expense,
 } from '@/types'
@@ -463,6 +463,7 @@ interface RevenuePointApi   { date: string; revenue: number; orders: number }
 interface TopProductApi     { product_id: string | null; product_name: string; total_sold: number; revenue: number; percentage_of_total: number }
 interface CategoryPerfApi   { category_id: string | null; category_name: string; total_sold: number; revenue: number; percentage_of_total: number }
 interface CustomerGrowthApi { date: string; new_customers: number }
+interface MonthlyDataApi    { month: number; month_name: string; revenue: number; expenses: number; net_profit: number; orders: number }
 
 export const analyticsService = {
   /** GET /businesses/:id/analytics/summary/ */
@@ -546,6 +547,21 @@ export const analyticsService = {
       analyticsService.getCustomerGrowth(businessId, period),
     ])
     return { ...summary, revenueData: revenue, topProducts, categoryPerformance: categories, customerGrowth }
+  },
+
+  /** GET /businesses/:id/analytics/monthly/?year=YYYY — returns all 12 months */
+  async getMonthly(businessId: string, year: number): Promise<MonthlyDataPoint[]> {
+    const res = await api.get<DataEnvelope<MonthlyDataApi[]>>(
+      `/api/v1/businesses/${businessId}/analytics/monthly/?year=${year}`
+    )
+    return (res.data ?? []).map(r => ({
+      month:     r.month,
+      monthName: r.month_name,
+      revenue:   r.revenue,
+      expenses:  r.expenses,
+      netProfit: r.net_profit,
+      orders:    r.orders,
+    }))
   },
 }
 

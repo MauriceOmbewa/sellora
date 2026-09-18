@@ -29,7 +29,10 @@ const CustomersPage      = lazy(() => import('@/pages/dashboard/CustomersPage'))
 const CustomerDetailPage = lazy(() => import('@/pages/dashboard/CustomerDetailPage'))
 const InventoryPage      = lazy(() => import('@/pages/dashboard/InventoryPage'))
 const FinancesPage       = lazy(() => import('@/pages/dashboard/FinancesPage'))
-const AnalyticsPage      = lazy(() => import('@/pages/dashboard/AnalyticsPage'))
+const AnalyticsPage          = lazy(() => import('@/pages/dashboard/AnalyticsPage'))
+const AnalyticsRevenuePage   = lazy(() => import('@/pages/dashboard/AnalyticsRevenuePage'))
+const AnalyticsFinancesPage  = lazy(() => import('@/pages/dashboard/AnalyticsFinancesPage'))
+const AnalyticsProductsPage  = lazy(() => import('@/pages/dashboard/AnalyticsProductsPage'))
 const StorefrontMgmtPage = lazy(() => import('@/pages/dashboard/StorefrontMgmtPage'))
 const MessagesPage       = lazy(() => import('@/pages/dashboard/MessagesPage'))
 const SettingsPage       = lazy(() => import('@/pages/dashboard/SettingsPage'))
@@ -182,6 +185,9 @@ function AdminRoutes() {
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="finances" element={<FinancesPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="analytics/revenue"  element={<AnalyticsRevenuePage />} />
+          <Route path="analytics/finances" element={<AnalyticsFinancesPage />} />
+          <Route path="analytics/products" element={<AnalyticsProductsPage />} />
           <Route path="storefront" element={<StorefrontMgmtPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="settings" element={<SettingsPage />} />

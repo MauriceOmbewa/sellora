@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { NavLink, useNavigate, Outlet } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users, Archive,
-  DollarSign, BarChart2, Globe, MessageSquare, Settings,
+  DollarSign, BarChart2, TrendingUp, PieChart, Receipt,
+  Globe, MessageSquare, Settings,
   HelpCircle, ExternalLink, Menu, X, ChevronDown,
   LogOut, Bell,
 } from 'lucide-react'
@@ -16,19 +17,113 @@ interface NavItem {
   badge?: number
 }
 
+interface NavGroup {
+  icon: React.ReactNode
+  label: string
+  basePath: string          // used to detect "any child is active"
+  children: { label: string; to: string; icon: React.ReactNode }[]
+}
+
 const navItems: NavItem[] = [
-  { icon: <LayoutDashboard size={16} />, label: 'Overview', to: '/app' },
-  { icon: <Package size={16} />, label: 'Products', to: '/app/products' },
-  { icon: <Tag size={16} />, label: 'Categories', to: '/app/categories' },
-  { icon: <ShoppingBag size={16} />, label: 'Orders', to: '/app/orders', badge: 3 },
-  { icon: <Users size={16} />, label: 'Customers', to: '/app/customers' },
-  { icon: <Archive size={16} />, label: 'Inventory', to: '/app/inventory' },
-  { icon: <DollarSign size={16} />, label: 'Finances', to: '/app/finances' },
-  { icon: <BarChart2 size={16} />, label: 'Analytics', to: '/app/analytics' },
-  { icon: <Globe size={16} />, label: 'Storefront', to: '/app/storefront' },
-  { icon: <MessageSquare size={16} />, label: 'Messages', to: '/app/messages', badge: 2 },
-  { icon: <Settings size={16} />, label: 'Settings', to: '/app/settings' },
+  { icon: <LayoutDashboard size={16} />, label: 'Overview',   to: '/app' },
+  { icon: <Package        size={16} />, label: 'Products',    to: '/app/products' },
+  { icon: <Tag            size={16} />, label: 'Categories',  to: '/app/categories' },
+  { icon: <ShoppingBag   size={16} />, label: 'Orders',       to: '/app/orders', badge: 3 },
+  { icon: <Users          size={16} />, label: 'Customers',   to: '/app/customers' },
+  { icon: <Archive        size={16} />, label: 'Inventory',   to: '/app/inventory' },
+  { icon: <DollarSign     size={16} />, label: 'Finances',    to: '/app/finances' },
 ]
+
+const analyticsGroup: NavGroup = {
+  icon:     <BarChart2 size={16} />,
+  label:    'Analytics',
+  basePath: '/app/analytics',
+  children: [
+    { label: 'Overview',  to: '/app/analytics',          icon: <BarChart2  size={13} /> },
+    { label: 'Revenue',   to: '/app/analytics/revenue',  icon: <TrendingUp size={13} /> },
+    { label: 'Finances',  to: '/app/analytics/finances', icon: <Receipt    size={13} /> },
+    { label: 'Products',  to: '/app/analytics/products', icon: <PieChart   size={13} /> },
+  ],
+}
+
+const navItemsAfter: NavItem[] = [
+  { icon: <Globe         size={16} />, label: 'Storefront', to: '/app/storefront' },
+  { icon: <MessageSquare size={16} />, label: 'Messages',   to: '/app/messages', badge: 2 },
+  { icon: <Settings      size={16} />, label: 'Settings',   to: '/app/settings' },
+]
+
+function NavItemLink({ item, onClose }: { item: NavItem; onClose?: () => void }) {
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/app'}
+      onClick={onClose}
+      className={({ isActive }) =>
+        [
+          'flex items-center gap-2.5 px-3 py-2.5 rounded-[8px] text-[13.5px] font-medium transition-all',
+          isActive ? 'bg-gold text-ink' : 'text-ivory/70 hover:bg-white/5 hover:text-ivory',
+        ].join(' ')
+      }
+    >
+      {item.icon}
+      <span className="flex-1">{item.label}</span>
+      {item.badge ? (
+        <span className="bg-red text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+          {item.badge}
+        </span>
+      ) : null}
+    </NavLink>
+  )
+}
+
+function AnalyticsNavGroup({ group, onClose }: { group: NavGroup; onClose?: () => void }) {
+  const location = useLocation()
+  const isAnyChildActive = location.pathname.startsWith(group.basePath)
+  const [open, setOpen] = useState(isAnyChildActive)
+
+  return (
+    <div>
+      {/* Group header button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={[
+          'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[8px] text-[13.5px] font-medium transition-all',
+          isAnyChildActive ? 'bg-gold text-ink' : 'text-ivory/70 hover:bg-white/5 hover:text-ivory',
+        ].join(' ')}
+      >
+        {group.icon}
+        <span className="flex-1 text-left">{group.label}</span>
+        <ChevronDown
+          size={13}
+          className={['transition-transform duration-200 opacity-70', open ? 'rotate-180' : ''].join(' ')}
+        />
+      </button>
+
+      {/* Sub-items */}
+      {open && (
+        <div className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
+          {group.children.map(child => (
+            <NavLink
+              key={child.to}
+              to={child.to}
+              end={child.to === group.basePath}   // exact match for Overview
+              onClick={onClose}
+              className={({ isActive }) =>
+                [
+                  'flex items-center gap-2 px-2.5 py-2 rounded-[7px] text-[12.5px] font-medium transition-all',
+                  isActive ? 'bg-white/15 text-ivory' : 'text-ivory/55 hover:bg-white/5 hover:text-ivory/80',
+                ].join(' ')
+              }
+            >
+              {child.icon}
+              {child.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const { user, currentBusiness, businesses, setCurrentBusiness, signOut } = useAuth()
@@ -113,34 +208,18 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       {/* Nav */}
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
         {navItems.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/app'}
-            onClick={onClose}
-            className={({ isActive }) =>
-              [
-                'flex items-center gap-2.5 px-3 py-2.5 rounded-[8px] text-[13.5px] font-medium transition-all',
-                isActive
-                  ? 'bg-gold text-ink'
-                  : 'text-ivory/70 hover:bg-white/5 hover:text-ivory',
-              ].join(' ')
-            }
-          >
-            {item.icon}
-            <span className="flex-1">{item.label}</span>
-            {item.badge ? (
-              <span className="bg-red text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-                {item.badge}
-              </span>
-            ) : null}
-          </NavLink>
+          <NavItemLink key={item.to} item={item} onClose={onClose} />
+        ))}
+
+        <AnalyticsNavGroup group={analyticsGroup} onClose={onClose} />
+
+        {navItemsAfter.map(item => (
+          <NavItemLink key={item.to} item={item} onClose={onClose} />
         ))}
       </nav>
 
       {/* Footer */}
       <div className="px-3 pb-4 pt-3 border-t border-white/10 space-y-1">
-        {/* View store */}
         <button
           onClick={handleViewStore}
           className="w-full flex items-center justify-between bg-gold text-ink px-3 py-2.5 rounded-[9px] text-[13px] font-bold hover:bg-gold-deep transition-colors mb-2"
@@ -149,7 +228,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <ExternalLink size={13} />
         </button>
 
-        {/* Help */}
         <NavLink
           to="/app/help"
           onClick={onClose}
@@ -159,7 +237,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           Help & Support
         </NavLink>
 
-        {/* User */}
         <div className="flex items-center gap-2.5 px-3 py-2 mt-1">
           <Avatar name={user?.name ?? 'User'} image={user?.avatar} size="sm" />
           <div className="flex-1 min-w-0">

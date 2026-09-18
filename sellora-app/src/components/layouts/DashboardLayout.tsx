@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users, Archive,
-  DollarSign, BarChart2, TrendingUp, PieChart, Receipt,
+  DollarSign, TrendingUp, Receipt, Wallet,
+  BarChart2, TrendingUp as TrendingUpIcon, PieChart,
   Globe, MessageSquare, Settings,
   HelpCircle, ExternalLink, Menu, X, ChevronDown,
   LogOut, Bell,
@@ -31,18 +32,28 @@ const navItems: NavItem[] = [
   { icon: <ShoppingBag   size={16} />, label: 'Orders',       to: '/app/orders', badge: 3 },
   { icon: <Users          size={16} />, label: 'Customers',   to: '/app/customers' },
   { icon: <Archive        size={16} />, label: 'Inventory',   to: '/app/inventory' },
-  { icon: <DollarSign     size={16} />, label: 'Finances',    to: '/app/finances' },
 ]
+
+const financesGroup: NavGroup = {
+  icon:     <DollarSign size={16} />,
+  label:    'Finances',
+  basePath: '/app/finances',
+  children: [
+    { label: 'Overview',  to: '/app/finances',          icon: <Wallet   size={13} /> },
+    { label: 'Income',    to: '/app/finances/income',   icon: <TrendingUp size={13} /> },
+    { label: 'Expenses',  to: '/app/finances/expenses', icon: <Receipt  size={13} /> },
+  ],
+}
 
 const analyticsGroup: NavGroup = {
   icon:     <BarChart2 size={16} />,
   label:    'Analytics',
   basePath: '/app/analytics',
   children: [
-    { label: 'Overview',  to: '/app/analytics',          icon: <BarChart2  size={13} /> },
-    { label: 'Revenue',   to: '/app/analytics/revenue',  icon: <TrendingUp size={13} /> },
-    { label: 'Finances',  to: '/app/analytics/finances', icon: <Receipt    size={13} /> },
-    { label: 'Products',  to: '/app/analytics/products', icon: <PieChart   size={13} /> },
+    { label: 'Overview',  to: '/app/analytics',          icon: <BarChart2      size={13} /> },
+    { label: 'Revenue',   to: '/app/analytics/revenue',  icon: <TrendingUpIcon size={13} /> },
+    { label: 'Finances',  to: '/app/analytics/finances', icon: <Receipt        size={13} /> },
+    { label: 'Products',  to: '/app/analytics/products', icon: <PieChart       size={13} /> },
   ],
 }
 
@@ -211,6 +222,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <NavItemLink key={item.to} item={item} onClose={onClose} />
         ))}
 
+        <AnalyticsNavGroup group={financesGroup}  onClose={onClose} />
         <AnalyticsNavGroup group={analyticsGroup} onClose={onClose} />
 
         {navItemsAfter.map(item => (

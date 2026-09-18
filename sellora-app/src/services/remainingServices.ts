@@ -8,7 +8,7 @@ import type {
   InventoryItem, StockAdjustment, Customer, Order, OrderStatus,
   AnalyticsSummary, RevenueDataPoint, ProductPerformance, MonthlyDataPoint,
   CategoryPerformance, CustomerGrowthPoint, Message, MessageStatus,
-  FinanceSummary, Expense,
+  FinanceSummary, Expense, IncomeEntry,
 } from '@/types'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -440,6 +440,69 @@ export const financesService = {
   /** DELETE /businesses/:id/finances/expenses/:id/ */
   async deleteExpense(businessId: string, expenseId: string): Promise<void> {
     await api.delete(`/api/v1/businesses/${businessId}/finances/expenses/${expenseId}/`)
+  },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INCOME  (finances sub-resource)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface IncomeEntryApi {
+  id: string
+  order_id: string
+  order_number: string
+  customer_name: string
+  customer_phone: string
+  payment_method: string
+  channel: string
+  amount: string
+  date: string
+  items_summary: string
+}
+
+function mapIncomeEntry(raw: IncomeEntryApi): IncomeEntry {
+  return {
+    id:            raw.id,
+    orderId:       raw.order_id,
+    orderNumber:   raw.order_number,
+    customerName:  raw.customer_name,
+    customerPhone: raw.customer_phone,
+    paymentMethod: raw.payment_method,
+    channel:       raw.channel,
+    amount:        parseFloat(raw.amount),
+    date:          raw.date,
+    itemsSummary:  raw.items_summary,
+  }
+}
+
+export interface IncomeListParams {
+  period?: '7d' | '30d' | '90d' | 'all'
+  search?: string
+  payment_method?: string
+  page?: number
+  page_size?: number
+}
+
+export const incomeService = {
+  /** GET /businesses/:id/finances/income/ */
+  async getAll(
+    businessId: string,
+    params: IncomeListParams = {},
+  ): Promise<{ entries: IncomeEntry[]; count: number; totalPages: number }> {
+    const qs = new URLSearchParams()
+    if (params.period)         qs.set('period',         params.period)
+    if (params.search)         qs.set('search',         params.search)
+    if (params.payment_method) qs.set('payment_method', params.payment_method)
+    if (params.page)           qs.set('page',           String(params.page))
+    qs.set('page_size', String(params.page_size ?? 20))
+    const res = await api.get<PaginatedEnvelope<IncomeEntryApi>>(
+      `/api/v1/businesses/${businessId}/finances/income/?${qs}`,
+    )
+    return {
+      entries:    res.results.map(mapIncomeEntry),
+      count:      res.count,
+      totalPages: res.total_pages,
+    }
   },
 }
 

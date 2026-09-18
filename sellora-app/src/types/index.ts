@@ -279,13 +279,17 @@ export interface Expense {
   createdAt: string
 }
 
-export interface FinanceActivity {
+export interface IncomeEntry {
   id: string
-  type: 'income' | 'expense' | 'refund'
-  description: string
+  orderId: string
+  orderNumber: string
+  customerName: string
+  customerPhone: string
+  paymentMethod: string
+  channel: string
   amount: number
-  date: string
-  category: string
+  date: string           // ISO datetime string (order created_at)
+  itemsSummary: string   // e.g. "Zara trouser ×2, Shirt ×1"
 }
 
 // ============================================================

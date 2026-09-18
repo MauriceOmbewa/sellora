@@ -489,18 +489,18 @@ export const analyticsService = {
 
   /** GET /businesses/:id/analytics/revenue/ */
   async getRevenue(businessId: string, period = '30d'): Promise<RevenueDataPoint[]> {
-    const res = await api.get<RevenuePointApi[]>(
+    const res = await api.get<DataEnvelope<RevenuePointApi[]>>(
       `/api/v1/businesses/${businessId}/analytics/revenue/?period=${period}`
     )
-    return res.map(r => ({ date: r.date, revenue: r.revenue, orders: r.orders }))
+    return (res.data ?? []).map(r => ({ date: r.date, revenue: r.revenue, orders: r.orders }))
   },
 
   /** GET /businesses/:id/analytics/top-products/ */
   async getTopProducts(businessId: string, period = '30d', limit = 5): Promise<ProductPerformance[]> {
-    const res = await api.get<TopProductApi[]>(
+    const res = await api.get<DataEnvelope<TopProductApi[]>>(
       `/api/v1/businesses/${businessId}/analytics/top-products/?period=${period}&limit=${limit}`
     )
-    return res.map(r => ({
+    return (res.data ?? []).map(r => ({
       productId:          r.product_id ?? '',
       productName:        r.product_name,
       totalSold:          r.total_sold,
@@ -511,10 +511,10 @@ export const analyticsService = {
 
   /** GET /businesses/:id/analytics/categories/ */
   async getCategories(businessId: string, period = '30d'): Promise<CategoryPerformance[]> {
-    const res = await api.get<CategoryPerfApi[]>(
+    const res = await api.get<DataEnvelope<CategoryPerfApi[]>>(
       `/api/v1/businesses/${businessId}/analytics/categories/?period=${period}`
     )
-    return res.map(r => ({
+    return (res.data ?? []).map(r => ({
       categoryId:         r.category_id ?? '',
       categoryName:       r.category_name,
       totalSold:          r.total_sold,
@@ -525,14 +525,14 @@ export const analyticsService = {
 
   /** GET /businesses/:id/analytics/customer-growth/ */
   async getCustomerGrowth(businessId: string, period = '30d'): Promise<CustomerGrowthPoint[]> {
-    const res = await api.get<CustomerGrowthApi[]>(
+    const res = await api.get<DataEnvelope<CustomerGrowthApi[]>>(
       `/api/v1/businesses/${businessId}/analytics/customer-growth/?period=${period}`
     )
-    return res.map(r => ({
-      date:              r.date,
-      newCustomers:      r.new_customers,
-      returningCustomers: 0,  // not available from this endpoint
-      totalCustomers:    0,
+    return (res.data ?? []).map(r => ({
+      date:               r.date,
+      newCustomers:       r.new_customers,
+      returningCustomers: 0,
+      totalCustomers:     0,
     }))
   },
 

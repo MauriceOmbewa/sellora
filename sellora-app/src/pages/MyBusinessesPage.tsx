@@ -19,27 +19,35 @@ const categoryLabels: Record<string, string> = {
   other: 'Other retail',
 }
 
-function BusinessCard({ biz, onOpen }: { biz: Business; onOpen: () => void }) {
+function BusinessCard({ biz, onOpen, onDelete }: { biz: Business; onOpen: () => void; onDelete: () => void }) {
   return (
-    <button
-      onClick={onOpen}
-      className="text-left bg-white border border-sand rounded-[16px] p-6 flex flex-col hover:border-ink/30 hover:-translate-y-0.5 transition-all duration-150 focus-visible:outline-2 focus-visible:outline-gold"
-    >
+    <div className="bg-white border border-sand rounded-[16px] p-6 flex flex-col hover:border-ink/30 hover:-translate-y-0.5 transition-all duration-150">
+      {/* Header row: avatar · spacer · delete + owner badge */}
       <div className="flex items-start justify-between mb-5">
         <div
-          className="w-11 h-11 rounded-[12px] flex items-center justify-center font-serif font-semibold text-[18px]"
+          className="w-11 h-11 rounded-[12px] flex items-center justify-center font-serif font-semibold text-[18px] shrink-0"
           style={{ background: biz.theme.primaryColor, color: '#FAF8F3' }}
         >
           {biz.name[0]}
         </div>
-        <span className="text-[11px] font-semibold text-slate bg-ivory border border-sand px-2.5 py-1 rounded-full">
-          Owner
-        </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            className="p-1.5 rounded-[7px] text-slate hover:text-red hover:bg-red-light transition-colors"
+            title="Delete business"
+          >
+            <Trash2 size={14} />
+          </button>
+          <span className="text-[11px] font-semibold text-slate bg-ivory border border-sand px-2.5 py-1 rounded-full">
+            Owner
+          </span>
+        </div>
       </div>
 
       <h3 className="font-serif text-[18px] font-medium text-ink mb-1">{biz.name}</h3>
       <p className="text-[13px] text-slate mb-5">
-        {categoryLabels[biz.category] ?? biz.category} · {biz.contact.city}
+        {categoryLabels[biz.category] ?? biz.category}{biz.contact.city ? ` · ${biz.contact.city}` : ''}
       </p>
 
       <div className="flex gap-5 pt-4 border-t border-sand mb-5">
@@ -59,11 +67,14 @@ function BusinessCard({ biz, onOpen }: { biz: Business; onOpen: () => void }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[13.5px] font-semibold text-ink mt-auto">
+      <button
+        onClick={onOpen}
+        className="flex items-center justify-between text-[13.5px] font-semibold text-ink mt-auto hover:text-ink/70 transition-colors focus-visible:outline-2 focus-visible:outline-gold rounded-[4px]"
+      >
         <span>Open dashboard</span>
         <ArrowRight size={15} />
-      </div>
-    </button>
+      </button>
+    </div>
   )
 }
 
@@ -275,16 +286,12 @@ export default function MyBusinessesPage() {
         {/* Grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {businesses.map(biz => (
-            <div key={biz.id} className="relative group">
-              <BusinessCard biz={biz} onOpen={() => handleOpen(biz)} />
-              <button
-                onClick={e => { e.stopPropagation(); setDeleteTarget(biz) }}
-                className="absolute top-3 right-3 p-1.5 bg-white border border-sand rounded-[7px] text-slate hover:text-red hover:border-red-light opacity-0 group-hover:opacity-100 transition-all"
-                title="Delete business"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
+            <BusinessCard
+              key={biz.id}
+              biz={biz}
+              onOpen={() => handleOpen(biz)}
+              onDelete={() => setDeleteTarget(biz)}
+            />
           ))}
           <AddBusinessCard onClick={handleAdd} />
         </div>

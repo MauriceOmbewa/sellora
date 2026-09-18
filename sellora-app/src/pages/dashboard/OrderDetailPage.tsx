@@ -23,9 +23,10 @@ export default function OrderDetailPage() {
   const navigate = useNavigate()
   const { currentBusiness } = useAuth()
   const { toast } = useToast()
-  const [order, setOrder]     = useState<Order | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [updating, setUpdating] = useState(false)
+  const [order, setOrder]         = useState<Order | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [updating, setUpdating]   = useState(false)
+  const [payUpdating, setPayUpdating] = useState(false)
 
   useEffect(() => {
     if (!id || !currentBusiness) return
@@ -45,6 +46,18 @@ export default function OrderDetailPage() {
     } catch (err: unknown) {
       toast('error', 'Update failed', err instanceof Error ? err.message : '')
     } finally { setUpdating(false) }
+  }
+
+  const handlePaymentStatusChange = async (paymentStatus: Order['paymentStatus']) => {
+    if (!order || !currentBusiness) return
+    setPayUpdating(true)
+    try {
+      const updated = await orderService.updatePaymentStatus(currentBusiness.id, order.id, paymentStatus)
+      setOrder(updated)
+      toast('success', 'Payment updated', `Payment marked as ${paymentStatus}`)
+    } catch (err: unknown) {
+      toast('error', 'Update failed', err instanceof Error ? err.message : '')
+    } finally { setPayUpdating(false) }
   }
 
   if (loading || !order) {
@@ -203,6 +216,31 @@ export default function OrderDetailPage() {
                 <span className="text-[13.5px] font-semibold text-ink capitalize">{order.channel.replace('-', ' ')}</span>
               </div>
             </div>
+
+            {/* Payment action — only show when there's something actionable */}
+            {order.paymentStatus === 'pending' && (
+              <button
+                onClick={() => handlePaymentStatusChange('paid')}
+                disabled={payUpdating}
+                className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-4 bg-ink text-ivory text-[13px] font-semibold rounded-[8px] hover:bg-ink/80 disabled:opacity-50 transition-colors"
+              >
+                {payUpdating ? (
+                  <span className="w-3.5 h-3.5 border-2 border-ivory/30 border-t-ivory rounded-full animate-spin" />
+                ) : (
+                  <Check size={13} />
+                )}
+                Mark as paid
+              </button>
+            )}
+            {order.paymentStatus === 'paid' && (
+              <button
+                onClick={() => handlePaymentStatusChange('refunded')}
+                disabled={payUpdating}
+                className="mt-4 w-full py-2 px-4 border border-sand text-[13px] font-semibold text-slate hover:text-red hover:border-red-light rounded-[8px] disabled:opacity-50 transition-colors"
+              >
+                {payUpdating ? 'Processing…' : 'Mark as refunded'}
+              </button>
+            )}
           </div>
         </div>
       </div>

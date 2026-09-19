@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { CreditCard, Banknote, ArrowLeft, MessageCircle } from 'lucide-react'
+import { CreditCard, Banknote, ArrowLeft, MessageCircle, Truck, Store } from 'lucide-react'
 import { useStorefront } from '@/context/StorefrontContext'
 import { Input, Textarea, useToast } from '@/components/ui'
 import { storefrontService } from '@/services/storefrontService'
@@ -24,10 +24,14 @@ interface STKPushResponse {
 }
 
 export default function StorefrontCheckout() {
-  const { cart, business, clearCart, basePath } = useStorefront()
+  const { cart, business, clearCart, basePath, setFulfillmentType } = useStorefront()
   const navigate = useNavigate()
   const { toast } = useToast()
   const primary = business?.theme.primaryColor ?? '#C79A3D'
+
+  const ds = business?.deliverySettings
+  const deliveryEnabled = ds?.deliveryEnabled ?? true
+  const pickupEnabled   = ds?.pickupEnabled   ?? true
 
   const [form, setForm] = useState({
     name: '',
@@ -37,9 +41,9 @@ export default function StorefrontCheckout() {
     notes: '',
   })
 
-  const [payment, setPayment] = useState<PaymentMethod>('mpesa')
+  const [payment, setPayment]   = useState<PaymentMethod>('mpesa')
   const [submitting, setSubmitting] = useState(false)
-  const [errors, setErrors] = useState<Partial<typeof form>>({})
+  const [errors, setErrors]     = useState<Partial<typeof form>>({})
 
   const set = (k: keyof typeof form, v: string) => {
     setForm(p => ({ ...p, [k]: v }))
@@ -48,15 +52,11 @@ export default function StorefrontCheckout() {
 
   const validate = () => {
     const e: Partial<typeof form> = {}
-
-    if (!form.name.trim()) {
-      e.name = 'Full name is required'
+    if (!form.name.trim())  e.name  = 'Full name is required'
+    if (!form.phone.trim()) e.phone = 'Phone number is required'
+    if (cart.fulfillmentType === 'delivery' && !form.address.trim()) {
+      e.address = 'Delivery address is required'
     }
-
-    if (!form.phone.trim()) {
-      e.phone = 'Phone number is required'
-    }
-
     return e
   }
 
@@ -93,14 +93,13 @@ export default function StorefrontCheckout() {
           customer_name: form.name,
           customer_phone: form.phone,
           customer_email: form.email || undefined,
-          delivery_address: form.address || undefined,
+          delivery_address: cart.fulfillmentType === 'delivery' ? (form.address || undefined) : undefined,
           order_notes: form.notes || undefined,
-
+          fulfillment_type: cart.fulfillmentType,
           payment_method:
             payment === 'whatsapp'
               ? 'cash'
               : payment,
-
           items: cart.items.map(i => ({
             product_id: i.productId,
             quantity: i.quantity,
@@ -218,6 +217,67 @@ export default function StorefrontCheckout() {
         {/* Form */}
         <div className="lg:col-span-2 space-y-6">
 
+          {/* Fulfillment — delivery vs pickup */}
+          {(deliveryEnabled || pickupEnabled) && (
+            <div className="bg-white border border-sand rounded-[14px] p-6">
+              <h2 className="font-serif text-[18px] font-medium text-ink mb-4">
+                How would you like to receive your order?
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {deliveryEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setFulfillmentType('delivery')}
+                    className={[
+                      'flex items-center gap-4 p-4 rounded-[12px] border-2 transition-all text-left',
+                      cart.fulfillmentType === 'delivery'
+                        ? 'border-ink bg-ivory/60'
+                        : 'border-sand hover:border-sand-dark',
+                    ].join(' ')}
+                  >
+                    <div className={[
+                      'w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0',
+                      cart.fulfillmentType === 'delivery' ? 'bg-ink text-ivory' : 'bg-ivory text-slate border border-sand',
+                    ].join(' ')}>
+                      <Truck size={18} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-ink text-[14px]">Delivery</p>
+                      <p className="text-[12.5px] text-slate mt-0.5">
+                        {cart.deliveryFee === 0
+                          ? 'Free delivery'
+                          : `KSh ${(ds?.deliveryFee ?? 300).toLocaleString()} fee`}
+                      </p>
+                    </div>
+                  </button>
+                )}
+                {pickupEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setFulfillmentType('pickup')}
+                    className={[
+                      'flex items-center gap-4 p-4 rounded-[12px] border-2 transition-all text-left',
+                      cart.fulfillmentType === 'pickup'
+                        ? 'border-ink bg-ivory/60'
+                        : 'border-sand hover:border-sand-dark',
+                    ].join(' ')}
+                  >
+                    <div className={[
+                      'w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0',
+                      cart.fulfillmentType === 'pickup' ? 'bg-ink text-ivory' : 'bg-ivory text-slate border border-sand',
+                    ].join(' ')}>
+                      <Store size={18} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-ink text-[14px]">Pick up myself</p>
+                      <p className="text-[12.5px] text-slate mt-0.5">No delivery fee</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Customer details */}
           <div className="bg-white border border-sand rounded-[14px] p-6">
             <h2 className="font-serif text-[18px] font-medium text-ink mb-5">
@@ -251,12 +311,15 @@ export default function StorefrontCheckout() {
                 />
               </div>
 
-              <Input
-                label="Delivery location"
-                placeholder="e.g. Westlands, Nairobi or physical address"
-                value={form.address}
-                onChange={e => set('address', e.target.value)}
-              />
+              {cart.fulfillmentType === 'delivery' && (
+                <Input
+                  label="Delivery address *"
+                  placeholder="e.g. Westlands, Nairobi or full physical address"
+                  value={form.address}
+                  onChange={e => set('address', e.target.value)}
+                  error={errors.address}
+                />
+              )}
 
               <Textarea
                 label="Order notes (optional)"
@@ -401,11 +464,14 @@ export default function StorefrontCheckout() {
 
               <div className="flex justify-between">
                 <span className="text-slate">
-                  Delivery
+                  {cart.fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery'}
                 </span>
-
-                <span>
-                  KSh {cart.deliveryFee.toLocaleString()}
+                <span className={cart.deliveryFee === 0 ? 'text-green font-semibold' : ''}>
+                  {cart.fulfillmentType === 'pickup'
+                    ? 'Free — self pickup'
+                    : cart.deliveryFee === 0
+                      ? 'Free'
+                      : `KSh ${cart.deliveryFee.toLocaleString()}`}
                 </span>
               </div>
 

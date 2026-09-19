@@ -83,13 +83,17 @@ export default function SettingsPage() {
     setNotifSaving(true)
     try {
       const updated = await businessService.updateSettings(currentBusiness.id, {
-        email_on_new_order:  notifSettings.email_on_new_order,
-        email_on_low_stock:  notifSettings.email_on_low_stock,
-        email_on_new_message: notifSettings.email_on_new_message,
-        sms_on_new_order:    notifSettings.sms_on_new_order,
-        currency:            notifSettings.currency,
-        timezone:            notifSettings.timezone,
-        language:            notifSettings.language,
+        email_on_new_order:       notifSettings.email_on_new_order,
+        email_on_low_stock:       notifSettings.email_on_low_stock,
+        email_on_new_message:     notifSettings.email_on_new_message,
+        sms_on_new_order:         notifSettings.sms_on_new_order,
+        currency:                 notifSettings.currency,
+        timezone:                 notifSettings.timezone,
+        language:                 notifSettings.language,
+        delivery_enabled:         notifSettings.delivery_enabled,
+        pickup_enabled:           notifSettings.pickup_enabled,
+        delivery_fee:             notifSettings.delivery_fee,
+        free_delivery_threshold:  notifSettings.free_delivery_threshold,
       })
       setNotifSettings(updated)
       toast('success', 'Preferences saved')
@@ -348,37 +352,94 @@ export default function SettingsPage() {
 
       {/* ── Notifications ─────────────────────────────────────────────────── */}
       {activeTab === 'notifications' && (
-        <div className="bg-white border border-sand rounded-[14px] p-5 max-w-lg space-y-6">
-          <h3 className="font-serif text-[17px] font-medium text-ink">Notification preferences</h3>
+        <div className="space-y-5 max-w-lg">
 
-          {notifLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} height={48} className="rounded-[10px]" />)}
-            </div>
-          ) : notifSettings ? (
-            <>
-              {[
-                { key: 'email_on_new_order',   label: 'Email on new order',   help: 'Get notified when a new order arrives.' },
-                { key: 'email_on_low_stock',   label: 'Email on low stock',   help: 'Alert when a product drops below its threshold.' },
-                { key: 'email_on_new_message', label: 'Email on new message', help: 'Be notified when a customer sends an inquiry.' },
-                { key: 'sms_on_new_order',     label: 'SMS on new order',     help: 'Receive a text when an order is placed.' },
-              ].map(item => (
-                <Toggle
-                  key={item.key}
-                  checked={(notifSettings as any)[item.key]}
-                  onChange={v => setNotifSettings(p => p ? { ...p, [item.key]: v } : p)}
-                  label={item.label}
-                  helpText={item.help}
-                />
-              ))}
-              <div className="flex justify-end pt-2">
-                <Button variant="primary" loading={notifSaving} onClick={handleSaveNotif}>
-                  Save preferences
-                </Button>
+          {/* Notification preferences card */}
+          <div className="bg-white border border-sand rounded-[14px] p-5 space-y-5">
+            <h3 className="font-serif text-[17px] font-medium text-ink">Notification preferences</h3>
+
+            {notifLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4].map(i => <Skeleton key={i} height={48} className="rounded-[10px]" />)}
               </div>
-            </>
-          ) : (
-            <p className="text-[13.5px] text-slate">Failed to load settings.</p>
+            ) : notifSettings ? (
+              <>
+                {[
+                  { key: 'email_on_new_order',   label: 'Email on new order',   help: 'Get notified when a new order arrives.' },
+                  { key: 'email_on_low_stock',   label: 'Email on low stock',   help: 'Alert when a product drops below its threshold.' },
+                  { key: 'email_on_new_message', label: 'Email on new message', help: 'Be notified when a customer sends an inquiry.' },
+                  { key: 'sms_on_new_order',     label: 'SMS on new order',     help: 'Receive a text when an order is placed.' },
+                ].map(item => (
+                  <Toggle
+                    key={item.key}
+                    checked={(notifSettings as any)[item.key]}
+                    onChange={v => setNotifSettings(p => p ? { ...p, [item.key]: v } : p)}
+                    label={item.label}
+                    helpText={item.help}
+                  />
+                ))}
+              </>
+            ) : (
+              <p className="text-[13.5px] text-slate">Failed to load settings.</p>
+            )}
+          </div>
+
+          {/* Delivery & fulfillment settings card */}
+          <div className="bg-white border border-sand rounded-[14px] p-5 space-y-5">
+            <div>
+              <h3 className="font-serif text-[17px] font-medium text-ink">Delivery & fulfilment</h3>
+              <p className="text-[13px] text-slate mt-0.5">Control how customers can receive their orders at checkout.</p>
+            </div>
+
+            {notifLoading ? (
+              <div className="space-y-3">
+                {[1, 2].map(i => <Skeleton key={i} height={48} className="rounded-[10px]" />)}
+              </div>
+            ) : notifSettings ? (
+              <div className="space-y-5">
+                {/* Toggles */}
+                <Toggle
+                  checked={notifSettings.delivery_enabled ?? true}
+                  onChange={v => setNotifSettings(p => p ? { ...p, delivery_enabled: v } : p)}
+                  label="Offer delivery"
+                  helpText="Customers can choose to have their order delivered to an address."
+                />
+                <Toggle
+                  checked={notifSettings.pickup_enabled ?? true}
+                  onChange={v => setNotifSettings(p => p ? { ...p, pickup_enabled: v } : p)}
+                  label="Offer self-pickup"
+                  helpText="Customers can choose to collect their order themselves at no delivery cost."
+                />
+
+                {/* Delivery fee inputs — only shown when delivery is enabled */}
+                {(notifSettings.delivery_enabled ?? true) && (
+                  <div className="pt-3 border-t border-sand grid grid-cols-2 gap-4">
+                    <Input
+                      label="Delivery fee (KSh)"
+                      type="number"
+                      value={notifSettings.delivery_fee ?? '300'}
+                      onChange={e => setNotifSettings(p => p ? { ...p, delivery_fee: e.target.value } : p)}
+                      helpText="Charged per order"
+                    />
+                    <Input
+                      label="Free delivery above (KSh)"
+                      type="number"
+                      value={notifSettings.free_delivery_threshold ?? '10000'}
+                      onChange={e => setNotifSettings(p => p ? { ...p, free_delivery_threshold: e.target.value } : p)}
+                      helpText="Set 0 to always charge"
+                    />
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {notifSettings && (
+            <div className="flex justify-end">
+              <Button variant="primary" loading={notifSaving} onClick={handleSaveNotif}>
+                Save settings
+              </Button>
+            </div>
           )}
         </div>
       )}

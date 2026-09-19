@@ -87,6 +87,13 @@ export interface Business {
   totalOrders: number
   totalRevenue: number
   totalCustomers: number
+  // Delivery settings (populated by storefront API)
+  deliverySettings?: {
+    deliveryEnabled: boolean
+    pickupEnabled: boolean
+    deliveryFee: number
+    freeDeliveryThreshold: number
+  }
 }
 
 export interface StorefrontSettings {
@@ -367,6 +374,7 @@ export interface Cart {
   subtotal: number
   deliveryFee: number
   total: number
+  fulfillmentType: 'delivery' | 'pickup'
 }
 
 // ============================================================

@@ -73,6 +73,11 @@ export interface BusinessSettingsApiObject {
   currency: string
   timezone: string
   language: string
+  // Delivery settings
+  delivery_enabled: boolean
+  pickup_enabled: boolean
+  delivery_fee: string
+  free_delivery_threshold: string
   updated_at: string
 }
 
@@ -130,6 +135,12 @@ export function mapBusiness(raw: BusinessApiObject): Business {
     totalOrders:    raw.total_orders ?? 0,
     totalRevenue:   parseFloat(raw.total_revenue ?? '0'),
     totalCustomers: raw.total_customers ?? 0,
+    deliverySettings: (raw as any).delivery_settings ? {
+      deliveryEnabled:       (raw as any).delivery_settings.delivery_enabled,
+      pickupEnabled:         (raw as any).delivery_settings.pickup_enabled,
+      deliveryFee:           parseFloat((raw as any).delivery_settings.delivery_fee ?? '300'),
+      freeDeliveryThreshold: parseFloat((raw as any).delivery_settings.free_delivery_threshold ?? '10000'),
+    } : undefined,
   }
 }
 

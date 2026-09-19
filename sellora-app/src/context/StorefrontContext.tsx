@@ -30,6 +30,7 @@ interface StorefrontContextType {
   removeFromCart: (productId: string) => void
   updateQty: (productId: string, qty: number) => void
   clearCart: () => void
+  setFulfillmentType: (type: 'delivery' | 'pickup') => void
 }
 
 const StorefrontContext = createContext<StorefrontContextType | null>(null)
@@ -48,7 +49,8 @@ export function StorefrontProvider({
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading]       = useState(true)
   const [notFound, setNotFound]     = useState(false)
-  const [cartItems, setCartItems]   = useState<CartItem[]>([])
+  const [cartItems, setCartItems]         = useState<CartItem[]>([])
+  const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery')
 
   useEffect(() => {
     if (!businessSlug) { setLoading(false); setNotFound(true); return }
@@ -142,21 +144,34 @@ export function StorefrontProvider({
 
   // ── Cart totals ───────────────────────────────────────────────────────────
 
-  const subtotal     = cartItems.reduce((s, i) => s + i.product.sellingPrice * i.quantity, 0)
-  const deliveryFee  = subtotal > 0 ? 300 : 0
-  const cart: Cart   = {
-    businessId:  business?.id ?? '',
-    items:       cartItems,
+  const subtotal = cartItems.reduce((s, i) => s + i.product.sellingPrice * i.quantity, 0)
+
+  // Use per-business delivery settings if available, otherwise fall back to 300/10000
+  const ds = business?.deliverySettings
+  const bizDeliveryFee       = ds?.deliveryFee       ?? 300
+  const bizFreeThreshold     = ds?.freeDeliveryThreshold ?? 10000
+
+  const deliveryFee =
+    fulfillmentType === 'pickup' || subtotal === 0
+      ? 0
+      : subtotal >= bizFreeThreshold
+        ? 0
+        : bizDeliveryFee
+
+  const cart: Cart = {
+    businessId:      business?.id ?? '',
+    items:           cartItems,
     subtotal,
     deliveryFee,
-    total:       subtotal + deliveryFee,
+    total:           subtotal + deliveryFee,
+    fulfillmentType,
   }
 
   return (
     <StorefrontContext.Provider value={{
       business, products, categories, cart, loading, notFound,
       basePath,
-      addToCart, removeFromCart, updateQty, clearCart,
+      addToCart, removeFromCart, updateQty, clearCart, setFulfillmentType,
     }}>
       {children}
     </StorefrontContext.Provider>

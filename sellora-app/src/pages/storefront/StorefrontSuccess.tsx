@@ -22,12 +22,20 @@ export default function StorefrontSuccess() {
 
       <div className="bg-white border border-sand rounded-[14px] p-5 mb-7 text-left space-y-3">
         <h2 className="font-semibold text-ink text-[15px]">What happens next?</h2>
-        {[
-          'We\'ll confirm your order via phone or WhatsApp',
-          'Payment instructions will be sent (if M-PESA)',
-          'Your order will be packed and dispatched',
-          'You\'ll receive delivery confirmation',
-        ].map((step, i) => (
+        {(searchParams.get('payment') === 'mpesa'
+          ? [
+              'Your M-PESA payment has been confirmed',
+              'We\'ll confirm your order via phone or WhatsApp',
+              'Your order will be packed and dispatched',
+              'You\'ll receive delivery confirmation',
+            ]
+          : [
+              'We\'ll confirm your order via phone or WhatsApp',
+              'Share your payment details when prompted',
+              'Your order will be packed and dispatched',
+              'You\'ll receive delivery confirmation',
+            ]
+        ).map((step, i) => (
           <div key={i} className="flex items-start gap-3 text-[13.5px] text-slate">
             <span className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" style={{ background: accent }}>
               {i + 1}

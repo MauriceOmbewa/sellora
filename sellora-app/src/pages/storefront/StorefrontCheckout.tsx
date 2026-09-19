@@ -1,29 +1,63 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { CreditCard, Banknote, ArrowLeft, MessageCircle, Truck, Store, CheckCircle, XCircle, Loader2 } from 'lucide-react'
-import { useStorefront } from '@/context/StorefrontContext'
-import { Input, Textarea, useToast } from '@/components/ui'
-import { api } from '@/services/api'
+import React, {
+  useState,
+  useEffect,
+  useRef,
+} from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  CreditCard,
+  Banknote,
+  ArrowLeft,
+  MessageCircle,
+  Truck,
+  Store,
+  CheckCircle,
+  XCircle,
+  Loader2,
+} from 'lucide-react'
 
-type PaymentMethod = 'mpesa' | 'cash' | 'whatsapp'
+import { useStorefront } from '@/context/StorefrontContext'
+import {
+  Input,
+  Textarea,
+  useToast,
+} from '@/components/ui'
+import { storefrontService } from '@/services/storefrontService'
+import { api } from '@/services/api'
+import PhoneInput from '@/components/ui/PhoneInput'
+
+type PaymentMethod =
+  | 'mpesa'
+  | 'cash'
+  | 'whatsapp'
 
 // ── M-Pesa polling state ──────────────────────────────────────────────────────
-type MpesaPollingStatus = 'waiting' | 'paid' | 'failed' | 'expired'
 
-interface MpesaInitiateResponse {
+type MpesaPollingStatus =
+  | 'waiting'
+  | 'paid'
+  | 'failed'
+  | 'expired'
+
+interface STKPushResponse {
   message: string
   checkout_request_id: string
   amount: string
 }
 
 interface MpesaStatusResponse {
-  status: 'pending' | 'paid' | 'failed' | 'expired'
+  status:
+    | 'pending'
+    | 'paid'
+    | 'failed'
+    | 'expired'
   order_id?: string
   order_number?: string
   reason?: string
 }
 
 // ── M-Pesa waiting overlay ────────────────────────────────────────────────────
+
 interface MpesaWaitingOverlayProps {
   phone: string
   amount: string
@@ -45,24 +79,38 @@ function MpesaWaitingOverlay({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="bg-white rounded-[20px] shadow-2xl max-w-sm w-full p-8 text-center">
 
+        {/* Waiting */}
         {pollingStatus === 'waiting' && (
           <>
             <div className="w-16 h-16 rounded-full bg-green-light flex items-center justify-center mx-auto mb-5">
-              <Loader2 size={30} className="text-green animate-spin" />
+              <Loader2
+                size={30}
+                className="text-green animate-spin"
+              />
             </div>
+
             <h2 className="font-serif text-[22px] text-ink mb-2">
               Waiting for payment…
             </h2>
+
             <p className="text-[14px] text-slate mb-1">
-              A payment request of <strong className="text-ink">KSh {parseFloat(amount).toLocaleString()}</strong> has been sent to
+              A payment request of{' '}
+              <strong className="text-ink">
+                KSh {parseFloat(amount).toLocaleString()}
+              </strong>{' '}
+              has been sent to
             </p>
+
             <p className="font-mono font-bold text-ink text-[15px] mb-5">
               {phone}
             </p>
+
             <p className="text-[13px] text-slate mb-6">
-              Open your M-PESA menu, enter your PIN to complete the payment.
-              This page will update automatically.
+              Open your M-PESA menu and enter your PIN
+              to complete the payment. This page will
+              update automatically.
             </p>
+
             <button
               onClick={onCancel}
               className="text-[13px] text-slate underline hover:text-ink"
@@ -72,33 +120,51 @@ function MpesaWaitingOverlay({
           </>
         )}
 
+        {/* Payment successful */}
         {pollingStatus === 'paid' && (
           <>
             <div className="w-16 h-16 rounded-full bg-green-light flex items-center justify-center mx-auto mb-5">
-              <CheckCircle size={30} className="text-green" />
+              <CheckCircle
+                size={30}
+                className="text-green"
+              />
             </div>
+
             <h2 className="font-serif text-[22px] text-ink mb-2">
               Payment confirmed!
             </h2>
+
             <p className="text-[14px] text-slate">
               Redirecting to your order confirmation…
             </p>
           </>
         )}
 
-        {(pollingStatus === 'failed' || pollingStatus === 'expired') && (
+        {/* Payment failed / expired */}
+        {(pollingStatus === 'failed' ||
+          pollingStatus === 'expired') && (
           <>
             <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-5">
-              <XCircle size={30} className="text-red-500" />
+              <XCircle
+                size={30}
+                className="text-red-500"
+              />
             </div>
+
             <h2 className="font-serif text-[22px] text-ink mb-2">
-              Payment {pollingStatus === 'expired' ? 'timed out' : 'failed'}
+              Payment{' '}
+              {pollingStatus === 'expired'
+                ? 'timed out'
+                : 'failed'}
             </h2>
+
             <p className="text-[14px] text-slate mb-6">
               {pollingStatus === 'expired'
                 ? 'The M-PESA request expired. Please try again.'
-                : failureReason || 'Your payment was not completed. Please try again.'}
+                : failureReason ||
+                  'Your payment was not completed. Please try again.'}
             </p>
+
             <div className="flex flex-col gap-3">
               <button
                 onClick={onRetry}
@@ -106,6 +172,7 @@ function MpesaWaitingOverlay({
               >
                 Try again
               </button>
+
               <button
                 onClick={onCancel}
                 className="text-[13px] text-slate underline hover:text-ink"
@@ -122,15 +189,29 @@ function MpesaWaitingOverlay({
 }
 
 // ── Main checkout page ────────────────────────────────────────────────────────
+
 export default function StorefrontCheckout() {
-  const { cart, business, clearCart, basePath, setFulfillmentType } = useStorefront()
+  const {
+    cart,
+    business,
+    clearCart,
+    basePath,
+    setFulfillmentType,
+  } = useStorefront()
+
   const navigate = useNavigate()
   const { toast } = useToast()
-  const primary = business?.theme.primaryColor ?? '#C79A3D'
+
+  const primary =
+    business?.theme.primaryColor ?? '#C79A3D'
 
   const ds = business?.deliverySettings
-  const deliveryEnabled = ds?.deliveryEnabled ?? true
-  const pickupEnabled   = ds?.pickupEnabled   ?? true
+
+  const deliveryEnabled =
+    ds?.deliveryEnabled ?? true
+
+  const pickupEnabled =
+    ds?.pickupEnabled ?? true
 
   const [form, setForm] = useState({
     name: '',
@@ -140,202 +221,357 @@ export default function StorefrontCheckout() {
     notes: '',
   })
 
-  const [payment, setPayment]     = useState<PaymentMethod>('mpesa')
-  const [submitting, setSubmitting] = useState(false)
-  const [errors, setErrors]       = useState<Partial<typeof form>>({})
+  const [payment, setPayment] =
+    useState<PaymentMethod>('mpesa')
 
-  // M-Pesa polling state
-  const [mpesaOverlay, setMpesaOverlay]       = useState(false)
-  const [mpesaPolling, setMpesaPolling]       = useState<MpesaPollingStatus>('waiting')
-  const [mpesaCheckoutId, setMpesaCheckoutId] = useState('')
-  const [mpesaAmount, setMpesaAmount]         = useState('')
-  const [mpesaFailReason, setMpesaFailReason] = useState('')
+  const [submitting, setSubmitting] =
+    useState(false)
 
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pollAttemptsRef = useRef(0)
-  // Poll for max ~3 minutes (60 attempts × 3 s)
+  const [errors, setErrors] =
+    useState<Partial<typeof form>>({})
+
+  /*
+   * Normalized phone number generated by PhoneInput.
+   *
+   * Example:
+   *
+   * 0712345678 -> 254712345678
+   * 712345678  -> 254712345678
+   */
+  const [normalizedPhone, setNormalizedPhone] =
+    useState('')
+
+  // ── M-PESA polling state ──────────────────────────────────────────────────
+
+  const [mpesaOverlay, setMpesaOverlay] =
+    useState(false)
+
+  const [mpesaPolling, setMpesaPolling] =
+    useState<MpesaPollingStatus>('waiting')
+
+  const [mpesaCheckoutId, setMpesaCheckoutId] =
+    useState('')
+
+  const [mpesaAmount, setMpesaAmount] =
+    useState('')
+
+  const [mpesaFailReason, setMpesaFailReason] =
+    useState('')
+
+  const pollIntervalRef =
+    useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const pollAttemptsRef =
+    useRef(0)
+
+  // Poll for approximately 3 minutes.
+  // 60 attempts × 3 seconds.
   const MAX_POLL_ATTEMPTS = 60
 
-  const set = (k: keyof typeof form, v: string) => {
-    setForm(p => ({ ...p, [k]: v }))
-    setErrors(p => ({ ...p, [k]: '' }))
+  const set = (
+    key: keyof typeof form,
+    value: string
+  ) => {
+    setForm(previous => ({
+      ...previous,
+      [key]: value,
+    }))
+
+    setErrors(previous => ({
+      ...previous,
+      [key]: '',
+    }))
   }
+
+  // ── Validation ─────────────────────────────────────────────────────────────
 
   const validate = () => {
-    const e: Partial<typeof form> = {}
-    if (!form.name.trim())  e.name  = 'Full name is required'
-    if (!form.phone.trim()) e.phone = 'Phone number is required'
-    if (cart.fulfillmentType === 'delivery' && !form.address.trim()) {
-      e.address = 'Delivery address is required'
+    const errors: Partial<typeof form> = {}
+
+    if (!form.name.trim()) {
+      errors.name = 'Full name is required'
     }
-    return e
+
+    if (!form.phone.trim()) {
+      errors.phone = 'Phone number is required'
+    }
+
+    if (
+      cart.fulfillmentType === 'delivery' &&
+      !form.address.trim()
+    ) {
+      errors.address =
+        'Delivery address is required'
+    }
+
+    return errors
   }
 
-  // ── Stop polling ────────────────────────────────────────────────────────────
+  // ── Stop polling ───────────────────────────────────────────────────────────
+
   const stopPolling = () => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current)
       pollIntervalRef.current = null
     }
+
     pollAttemptsRef.current = 0
   }
 
-  // Clean up on unmount
-  useEffect(() => () => stopPolling(), [])
+  // Clean up polling when leaving the page.
+  useEffect(() => {
+    return () => {
+      stopPolling()
+    }
+  }, [])
 
-  // ── Start polling after STK push ────────────────────────────────────────────
-  const startPolling = (checkoutRequestId: string, orderAmount: string) => {
+  // ── Start M-PESA polling ──────────────────────────────────────────────────
+
+  const startPolling = (
+    checkoutRequestId: string,
+    orderAmount: string
+  ) => {
     setMpesaCheckoutId(checkoutRequestId)
     setMpesaAmount(orderAmount)
     setMpesaPolling('waiting')
+    setMpesaFailReason('')
     setMpesaOverlay(true)
+
     pollAttemptsRef.current = 0
 
-    pollIntervalRef.current = setInterval(async () => {
-      pollAttemptsRef.current += 1
+    pollIntervalRef.current =
+      setInterval(async () => {
+        pollAttemptsRef.current += 1
 
-      // Timeout
-      if (pollAttemptsRef.current > MAX_POLL_ATTEMPTS) {
-        stopPolling()
-        setMpesaPolling('expired')
-        setSubmitting(false)
-        return
-      }
-
-      try {
-        const res = await api.get<MpesaStatusResponse>(
-          `/api/v1/payments/mpesa/status/${checkoutRequestId}/`
-        )
-
-        if (res.status === 'paid') {
+        // Timeout after maximum attempts.
+        if (
+          pollAttemptsRef.current >
+          MAX_POLL_ATTEMPTS
+        ) {
           stopPolling()
-          setMpesaPolling('paid')
-          clearCart()
-          // Brief pause so the success state is visible before navigating
-          setTimeout(() => {
-            navigate(
-              `${basePath}/success?order=${res.order_number ?? ''}&payment=mpesa`
-            )
-          }, 1200)
-        } else if (res.status === 'failed' || res.status === 'expired') {
-          stopPolling()
-          setMpesaPolling(res.status)
-          setMpesaFailReason(res.reason ?? '')
+
+          setMpesaPolling('expired')
           setSubmitting(false)
+
+          return
         }
-        // 'pending' — keep polling
-      } catch {
-        // Network hiccup — keep polling silently
-      }
-    }, 3000)
+
+        try {
+          const response =
+            await api.get<MpesaStatusResponse>(
+              `/api/v1/payments/mpesa/status/${checkoutRequestId}/`
+            )
+
+          if (response.status === 'paid') {
+            stopPolling()
+
+            setMpesaPolling('paid')
+
+            clearCart()
+
+            // Give the user a moment to see
+            // the successful payment message.
+            setTimeout(() => {
+              navigate(
+                `${basePath}/success?order=${response.order_number ?? ''}&payment=mpesa`
+              )
+            }, 1200)
+          }
+
+          if (
+            response.status === 'failed' ||
+            response.status === 'expired'
+          ) {
+            stopPolling()
+
+            setMpesaPolling(response.status)
+
+            setMpesaFailReason(
+              response.reason ?? ''
+            )
+
+            setSubmitting(false)
+          }
+
+          // pending:
+          // continue polling.
+        } catch {
+          /*
+           * Network error while polling.
+           *
+           * We deliberately keep polling because
+           * the payment may still be processing.
+           */
+        }
+      }, 3000)
   }
 
-  // ── Cancel / retry handlers ─────────────────────────────────────────────────
+  // ── M-PESA cancel ─────────────────────────────────────────────────────────
+
   const handleMpesaCancel = () => {
     stopPolling()
+
     setMpesaOverlay(false)
     setSubmitting(false)
   }
+
+  // ── M-PESA retry ──────────────────────────────────────────────────────────
 
   const handleMpesaRetry = () => {
     stopPolling()
+
     setMpesaOverlay(false)
     setMpesaPolling('waiting')
+    setMpesaFailReason('')
     setSubmitting(false)
-    // Let user click Place Order again — state is already reset
+
+    /*
+     * The customer can click Place Order again.
+     */
   }
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    const e = validate()
+  // ── Submit ─────────────────────────────────────────────────────────────────
 
-    if (Object.keys(e).length > 0) {
-      setErrors(e)
+  const handleSubmit = async () => {
+    const validationErrors = validate()
+
+    if (
+      Object.keys(validationErrors).length > 0
+    ) {
+      setErrors(validationErrors)
       return
     }
 
     if (!business) {
-      toast('error', 'Order failed', 'Store information is unavailable.')
+      toast(
+        'error',
+        'Order failed',
+        'Store information is unavailable.'
+      )
+
       return
     }
 
     setSubmitting(true)
 
     try {
-      if (payment === 'mpesa') {
-        /*
-         * M-PESA FLOW
-         * ──────────────────────────────────────────────────────────────
-         * 1. Send full cart + customer details to the backend.
-         *    The backend validates stock, calculates the total, and
-         *    initiates the STK Push.  NO order is created yet.
-         * 2. Show a waiting overlay and poll every 3 s.
-         * 3. When the callback marks the transaction as paid,
-         *    the backend creates the order and we navigate to /success.
-         * 4. On failure the overlay shows an error and lets the user retry.
-         */
-        const stkRes = await api.post<MpesaInitiateResponse>(
-          '/api/v1/payments/mpesa/initiate/',
+      /*
+       * STEP 1
+       *
+       * Create the order.
+       *
+       * The customer's original phone value is
+       * stored with the order.
+       *
+       * Example:
+       *
+       * customer_phone:
+       * 0712345678
+       */
+      const confirmation =
+        await storefrontService.placeOrder(
+          business.slug,
           {
-            business_slug:    business.slug,
-            customer_name:    form.name,
-            customer_phone:   form.phone,
-            customer_email:   form.email  || undefined,
-            delivery_address: cart.fulfillmentType === 'delivery'
-              ? (form.address || undefined)
-              : undefined,
-            order_notes:      form.notes  || undefined,
-            fulfillment_type: cart.fulfillmentType,
-            items: cart.items.map(i => ({
-              product_id: i.productId,
-              quantity:   i.quantity,
+            customer_name: form.name,
+
+            customer_phone: form.phone,
+
+            customer_email:
+              form.email || undefined,
+
+            delivery_address:
+              cart.fulfillmentType === 'delivery'
+                ? form.address || undefined
+                : undefined,
+
+            order_notes:
+              form.notes || undefined,
+
+            fulfillment_type:
+              cart.fulfillmentType,
+
+            payment_method:
+              payment === 'whatsapp'
+                ? 'cash'
+                : payment,
+
+            items: cart.items.map(item => ({
+              product_id: item.productId,
+              quantity: item.quantity,
             })),
           }
         )
 
-        // Start polling — leave submitting=true so the button stays disabled
-        startPolling(stkRes.checkout_request_id, stkRes.amount)
+      /*
+       * STEP 2
+       *
+       * M-PESA payment.
+       *
+       * PhoneInput provides the normalized number.
+       *
+       * Example:
+       *
+       * User enters:
+       * 0712345678
+       *
+       * normalizedPhone:
+       * 254712345678
+       */
+      if (payment === 'mpesa') {
+        const stkResponse =
+          await api.post<STKPushResponse>(
+            '/api/v1/payments/stk-push/',
+            {
+              order_id: confirmation.id,
+
+              /*
+               * IMPORTANT:
+               * M-PESA receives the normalized
+               * international-format phone number.
+               */
+              phone: normalizedPhone,
+            }
+          )
+
+        /*
+         * Start waiting for the M-PESA callback
+         * and payment status.
+         */
+        startPolling(
+          stkResponse.checkout_request_id,
+          stkResponse.amount
+        )
+
         return
       }
 
       /*
-       * CASH / WHATSAPP FLOW
-       * ──────────────────────────────────────────────────────────────
-       * Create the order immediately — no payment confirmation needed.
+       * STEP 3
+       *
+       * CASH / WHATSAPP
+       *
+       * The order has already been created,
+       * so we can immediately show success.
        */
-      const { storefrontService } = await import('@/services/storefrontService')
-      const confirmation = await storefrontService.placeOrder(
-        business.slug,
-        {
-          customer_name:    form.name,
-          customer_phone:   form.phone,
-          customer_email:   form.email || undefined,
-          delivery_address: cart.fulfillmentType === 'delivery'
-            ? (form.address || undefined)
-            : undefined,
-          order_notes:      form.notes || undefined,
-          fulfillment_type: cart.fulfillmentType,
-          payment_method:   payment === 'whatsapp' ? 'cash' : payment,
-          items: cart.items.map(i => ({
-            product_id: i.productId,
-            quantity:   i.quantity,
-          })),
-        }
-      )
-
       clearCart()
-      navigate(`${basePath}/success?order=${confirmation.order_number}`)
-    } catch (err: unknown) {
+
+      navigate(
+        `${basePath}/success?order=${confirmation.order_number}`
+      )
+    } catch (error: unknown) {
       toast(
         'error',
         'Payment failed',
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : 'Unable to place your order. Please try again.'
       )
+
       setSubmitting(false)
     }
   }
+
+  // ── Payment options ───────────────────────────────────────────────────────
 
   const paymentOptions: {
     id: PaymentMethod
@@ -363,6 +599,8 @@ export default function StorefrontCheckout() {
     },
   ]
 
+  // ── Empty cart ────────────────────────────────────────────────────────────
+
   if (cart.items.length === 0) {
     navigate(`${basePath}/cart`)
     return null
@@ -370,7 +608,7 @@ export default function StorefrontCheckout() {
 
   return (
     <>
-      {/* M-Pesa payment waiting overlay */}
+      {/* M-PESA payment waiting overlay */}
       {mpesaOverlay && (
         <MpesaWaitingOverlay
           phone={form.phone}
@@ -383,8 +621,12 @@ export default function StorefrontCheckout() {
       )}
 
       <div className="max-w-[1200px] mx-auto px-5 lg:px-8 py-10">
+
+        {/* Back to cart */}
         <button
-          onClick={() => navigate(`${basePath}/cart`)}
+          onClick={() =>
+            navigate(`${basePath}/cart`)
+          }
           className="flex items-center gap-2 text-[13.5px] text-slate hover:text-ink mb-7"
         >
           <ArrowLeft size={15} />
@@ -396,136 +638,222 @@ export default function StorefrontCheckout() {
         </h1>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Form */}
+
+          {/* ────────────────────────────────────────────────────────────────
+              FORM
+          ──────────────────────────────────────────────────────────────── */}
+
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Fulfillment — delivery vs pickup */}
-            {(deliveryEnabled || pickupEnabled) && (
+            {/* Fulfillment */}
+            {(deliveryEnabled ||
+              pickupEnabled) && (
               <div className="bg-white border border-sand rounded-[14px] p-6">
+
                 <h2 className="font-serif text-[18px] font-medium text-ink mb-4">
                   How would you like to receive your order?
                 </h2>
+
                 <div className="grid sm:grid-cols-2 gap-3">
+
+                  {/* Delivery */}
                   {deliveryEnabled && (
                     <button
                       type="button"
-                      onClick={() => setFulfillmentType('delivery')}
+                      onClick={() =>
+                        setFulfillmentType(
+                          'delivery'
+                        )
+                      }
                       className={[
                         'flex items-center gap-4 p-4 rounded-[12px] border-2 transition-all text-left',
-                        cart.fulfillmentType === 'delivery'
+                        cart.fulfillmentType ===
+                        'delivery'
                           ? 'border-ink bg-ivory/60'
                           : 'border-sand hover:border-sand-dark',
                       ].join(' ')}
                     >
-                      <div className={[
-                        'w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0',
-                        cart.fulfillmentType === 'delivery' ? 'bg-ink text-ivory' : 'bg-ivory text-slate border border-sand',
-                      ].join(' ')}>
+                      <div
+                        className={[
+                          'w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0',
+                          cart.fulfillmentType ===
+                          'delivery'
+                            ? 'bg-ink text-ivory'
+                            : 'bg-ivory text-slate border border-sand',
+                        ].join(' ')}
+                      >
                         <Truck size={18} />
                       </div>
+
                       <div>
-                        <p className="font-semibold text-ink text-[14px]">Delivery</p>
+                        <p className="font-semibold text-ink text-[14px]">
+                          Delivery
+                        </p>
+
                         <p className="text-[12.5px] text-slate mt-0.5">
-                          {cart.deliveryFee === 0
+                          {cart.deliveryFee ===
+                          0
                             ? 'Free delivery'
                             : `KSh ${(ds?.deliveryFee ?? 300).toLocaleString()} fee`}
                         </p>
                       </div>
                     </button>
                   )}
+
+                  {/* Pickup */}
                   {pickupEnabled && (
                     <button
                       type="button"
-                      onClick={() => setFulfillmentType('pickup')}
+                      onClick={() =>
+                        setFulfillmentType(
+                          'pickup'
+                        )
+                      }
                       className={[
                         'flex items-center gap-4 p-4 rounded-[12px] border-2 transition-all text-left',
-                        cart.fulfillmentType === 'pickup'
+                        cart.fulfillmentType ===
+                        'pickup'
                           ? 'border-ink bg-ivory/60'
                           : 'border-sand hover:border-sand-dark',
                       ].join(' ')}
                     >
-                      <div className={[
-                        'w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0',
-                        cart.fulfillmentType === 'pickup' ? 'bg-ink text-ivory' : 'bg-ivory text-slate border border-sand',
-                      ].join(' ')}>
+                      <div
+                        className={[
+                          'w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0',
+                          cart.fulfillmentType ===
+                          'pickup'
+                            ? 'bg-ink text-ivory'
+                            : 'bg-ivory text-slate border border-sand',
+                        ].join(' ')}
+                      >
                         <Store size={18} />
                       </div>
+
                       <div>
-                        <p className="font-semibold text-ink text-[14px]">Pick up myself</p>
-                        <p className="text-[12.5px] text-slate mt-0.5">No delivery fee</p>
+                        <p className="font-semibold text-ink text-[14px]">
+                          Pick up myself
+                        </p>
+
+                        <p className="text-[12.5px] text-slate mt-0.5">
+                          No delivery fee
+                        </p>
                       </div>
                     </button>
                   )}
+
                 </div>
               </div>
             )}
 
             {/* Customer details */}
             <div className="bg-white border border-sand rounded-[14px] p-6">
+
               <h2 className="font-serif text-[18px] font-medium text-ink mb-5">
                 Your details
               </h2>
 
               <div className="space-y-4">
+
                 <Input
                   label="Full name *"
                   placeholder="e.g. Fatuma Ndungu"
                   value={form.name}
-                  onChange={e => set('name', e.target.value)}
+                  onChange={e =>
+                    set(
+                      'name',
+                      e.target.value
+                    )
+                  }
                   error={errors.name}
                 />
 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Phone number *"
-                    placeholder="+254 712 345 678"
-                    value={form.phone}
-                    onChange={e => set('phone', e.target.value)}
-                    error={errors.phone}
-                  />
 
+                  {/* Phone */}
+                  <div className="relative">
+                    <PhoneInput
+                      label="Phone number *"
+                      placeholder="712 345 678"
+                      value={form.phone}
+                      onChange={value =>
+                        set('phone', value)
+                      }
+                      onNormalizedChange={
+                        setNormalizedPhone
+                      }
+                      error={errors.phone}
+                    />
+
+                    {/* <p className="absolute left-0 top-full mt-1.5 text-[11.5px] text-slate">
+                      Enter your number as 07XXXXXXXX or start with 7XXXXXXXX.
+                    </p> */}
+                  </div>
+
+                  {/* Email */}
                   <Input
                     label="Email (optional)"
                     type="email"
                     placeholder="your@email.com"
                     value={form.email}
-                    onChange={e => set('email', e.target.value)}
+                    onChange={e =>
+                      set(
+                        'email',
+                        e.target.value
+                      )
+                    }
                   />
+
                 </div>
 
-                {cart.fulfillmentType === 'delivery' && (
+                {/* Delivery address */}
+                {cart.fulfillmentType ===
+                  'delivery' && (
                   <Input
                     label="Delivery address *"
                     placeholder="e.g. Westlands, Nairobi or full physical address"
                     value={form.address}
-                    onChange={e => set('address', e.target.value)}
+                    onChange={e =>
+                      set(
+                        'address',
+                        e.target.value
+                      )
+                    }
                     error={errors.address}
                   />
                 )}
 
+                {/* Notes */}
                 <Textarea
                   label="Order notes (optional)"
                   placeholder="Any special instructions for your order…"
                   value={form.notes}
-                  onChange={e => set('notes', e.target.value)}
+                  onChange={e =>
+                    set(
+                      'notes',
+                      e.target.value
+                    )
+                  }
                   rows={3}
                 />
+
               </div>
             </div>
 
             {/* Payment */}
             <div className="bg-white border border-sand rounded-[14px] p-6">
+
               <h2 className="font-serif text-[18px] font-medium text-ink mb-5">
                 Payment method
               </h2>
 
               <div className="space-y-3">
-                {paymentOptions.map(opt => (
+
+                {paymentOptions.map(option => (
                   <label
-                    key={opt.id}
+                    key={option.id}
                     className={[
                       'flex items-start gap-4 p-4 rounded-[12px] border-2 cursor-pointer transition-all',
-                      payment === opt.id
+                      payment === option.id
                         ? 'border-ink bg-ivory/60'
                         : 'border-sand hover:border-sand-dark',
                     ].join(' ')}
@@ -533,47 +861,60 @@ export default function StorefrontCheckout() {
                     <input
                       type="radio"
                       name="payment"
-                      value={opt.id}
-                      checked={payment === opt.id}
-                      onChange={() => setPayment(opt.id)}
+                      value={option.id}
+                      checked={
+                        payment === option.id
+                      }
+                      onChange={() =>
+                        setPayment(
+                          option.id
+                        )
+                      }
                       className="mt-0.5 accent-ink"
                     />
 
                     <div className="flex items-start gap-3">
+
                       <div
                         className={[
                           'w-9 h-9 rounded-[9px] flex items-center justify-center shrink-0',
-                          payment === opt.id
+                          payment === option.id
                             ? 'bg-ink text-ivory'
                             : 'bg-ivory text-slate border border-sand',
                         ].join(' ')}
                       >
-                        {opt.icon}
+                        {option.icon}
                       </div>
 
                       <div>
                         <p className="font-semibold text-ink text-[14px]">
-                          {opt.label}
+                          {option.label}
                         </p>
 
                         <p className="text-[13px] text-slate mt-0.5">
-                          {opt.desc}
+                          {option.desc}
                         </p>
                       </div>
+
                     </div>
                   </label>
                 ))}
+
               </div>
 
+              {/* M-PESA information */}
               {payment === 'mpesa' && (
                 <div className="mt-4 bg-green-light border border-green/20 rounded-[12px] p-4 text-[13.5px] text-ink">
+
                   <p className="font-semibold mb-1">
                     M-PESA payment
                   </p>
 
                   <p className="text-slate">
                     Enter your M-PESA phone number above and click
-                    <strong className="text-ink"> Place Order</strong>.
+                    <strong className="text-ink">
+                      {' '}Place Order
+                    </strong>.
                   </p>
 
                   <p className="text-slate mt-1">
@@ -582,30 +923,43 @@ export default function StorefrontCheckout() {
                   </p>
 
                   <p className="text-slate mt-1">
-                    Your order will only be placed after payment is confirmed.
+                    Your order will only be completed after payment is confirmed.
                   </p>
+
                 </div>
               )}
+
             </div>
+
           </div>
 
-          {/* Summary */}
+          {/* ────────────────────────────────────────────────────────────────
+              ORDER SUMMARY
+          ──────────────────────────────────────────────────────────────── */}
+
           <div className="space-y-4">
+
             <div className="bg-white border border-sand rounded-[14px] p-5 sticky top-24">
+
               <h2 className="font-serif text-[18px] font-medium text-ink mb-4">
                 Order summary
               </h2>
 
               <div className="space-y-3 mb-4">
+
                 {cart.items.map(item => (
                   <div
                     key={item.productId}
                     className="flex items-center gap-3"
                   >
+
                     <div className="w-12 h-12 rounded-[8px] overflow-hidden bg-ivory border border-sand shrink-0">
                       {item.product.images[0] && (
                         <img
-                          src={item.product.images[0]}
+                          src={
+                            item.product
+                              .images[0]
+                          }
                           alt=""
                           className="w-full h-full object-cover"
                         />
@@ -613,6 +967,7 @@ export default function StorefrontCheckout() {
                     </div>
 
                     <div className="flex-1 min-w-0">
+
                       <p className="text-[13px] font-semibold text-ink truncate">
                         {item.product.name}
                       </p>
@@ -620,70 +975,101 @@ export default function StorefrontCheckout() {
                       <p className="text-[12px] text-slate">
                         ×{item.quantity}
                       </p>
+
                     </div>
 
                     <p className="text-[13px] font-semibold text-ink shrink-0">
                       KSh{' '}
                       {(
-                        item.product.sellingPrice *
+                        item.product
+                          .sellingPrice *
                         item.quantity
                       ).toLocaleString()}
                     </p>
+
                   </div>
                 ))}
+
               </div>
 
+              {/* Totals */}
               <div className="border-t border-sand pt-3 space-y-2 text-[13.5px]">
+
                 <div className="flex justify-between">
                   <span className="text-slate">
                     Subtotal
                   </span>
 
                   <span>
-                    KSh {cart.subtotal.toLocaleString()}
+                    KSh{' '}
+                    {cart.subtotal.toLocaleString()}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
+
                   <span className="text-slate">
-                    {cart.fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery'}
+                    {cart.fulfillmentType ===
+                    'pickup'
+                      ? 'Pickup'
+                      : 'Delivery'}
                   </span>
-                  <span className={cart.deliveryFee === 0 ? 'text-green font-semibold' : ''}>
-                    {cart.fulfillmentType === 'pickup'
+
+                  <span
+                    className={
+                      cart.deliveryFee === 0
+                        ? 'text-green font-semibold'
+                        : ''
+                    }
+                  >
+                    {cart.fulfillmentType ===
+                    'pickup'
                       ? 'Free — self pickup'
                       : cart.deliveryFee === 0
                         ? 'Free'
                         : `KSh ${cart.deliveryFee.toLocaleString()}`}
                   </span>
+
                 </div>
 
                 <div className="flex justify-between font-bold text-[15px] text-ink pt-1 border-t border-sand">
+
                   <span>Total</span>
 
                   <span>
-                    KSh {cart.total.toLocaleString()}
+                    KSh{' '}
+                    {cart.total.toLocaleString()}
                   </span>
+
                 </div>
+
               </div>
 
+              {/* Place order */}
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
                 className="w-full mt-5 flex items-center justify-center gap-2 py-4 text-white font-semibold text-[15px] rounded-[10px] disabled:opacity-60 hover:opacity-90 transition-opacity"
-                style={{ background: primary }}
+                style={{
+                  background: primary,
+                }}
               >
-                {submitting && !mpesaOverlay ? (
+                {submitting &&
+                !mpesaOverlay ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : null}
 
-                {submitting && !mpesaOverlay
+                {submitting &&
+                !mpesaOverlay
                   ? payment === 'mpesa'
                     ? 'Sending M-PESA request…'
                     : 'Placing order…'
                   : 'Place Order'}
               </button>
+
             </div>
           </div>
+
         </div>
       </div>
     </>

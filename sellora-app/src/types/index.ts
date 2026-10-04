@@ -355,8 +355,7 @@ export interface MonthlyDataPoint {
   netProfit: number
   orders: number
 }
-  customerGrowth: CustomerGrowthPoint[]
-}
+
 
 // ============================================================
 // CART (STOREFRONT)

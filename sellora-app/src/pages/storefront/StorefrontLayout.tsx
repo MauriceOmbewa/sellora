@@ -22,6 +22,7 @@ import { useState } from 'react'
 import { Outlet, Link, useParams, useNavigate } from 'react-router-dom'
 import { Search, ShoppingBag, Menu, X, MessageCircle, Share2 } from 'lucide-react'
 import { StorefrontProvider, useStorefront } from '@/context/StorefrontContext'
+import LiveChatWidget from '@/components/storefront/LiveChatWidget'
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 
@@ -271,6 +272,7 @@ function StorefrontContent() {
         <Outlet />
       </main>
       <StorefrontFooter />
+      <LiveChatWidget />
     </div>
   )
 }

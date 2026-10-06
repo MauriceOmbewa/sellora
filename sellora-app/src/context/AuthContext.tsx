@@ -19,6 +19,19 @@ interface AuthContextType {
   handleAuthCallback: (access: string, refresh: string) => Promise<void>
 }
 
+// ── Provider props ────────────────────────────────────────────────────────────
+
+interface AuthProviderProps {
+  children: React.ReactNode
+  /**
+   * When true the provider is being used by a public storefront — it will
+   * skip the /me network call and settle immediately in the correct state
+   * (authenticated or unauthenticated) based on token presence alone.
+   * This prevents a "loading" flicker for anonymous storefront visitors.
+   */
+  isStorefront?: boolean
+}
+
 const AuthContext = createContext<AuthContextType | null>(null)
 
 const USER_KEY     = 'sellora_user'
@@ -51,7 +64,7 @@ function mapUser(raw: MeResponse['data']): User {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children, isStorefront = false }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [authState, setAuthState] = useState<AuthState>('loading')
   const [businesses, setBusinesses] = useState<Business[]>([])
@@ -85,6 +98,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const access = tokenStorage.getAccess()
+
+    if (isStorefront) {
+      // In storefront mode we don't need to verify the token with the backend.
+      // We just need to know whether the visitor has a token so we can show
+      // a "My Dashboard" link in the nav. Settle immediately — no spinner.
+      if (!access) {
+        setAuthState('unauthenticated')
+        return
+      }
+      const cached = localStorage.getItem(USER_KEY)
+      if (cached) {
+        try { setUser(JSON.parse(cached) as User) } catch { /* ignore */ }
+      }
+      const cachedBizId = localStorage.getItem(BUSINESS_KEY)
+      if (cachedBizId) {
+        // Restore a stub business just enough to show "My Dashboard"
+        // Full validation happens when the user actually navigates there.
+        setAuthState('authenticated')
+      } else {
+        setAuthState('needs-onboarding')
+      }
+      return
+    }
+
     if (!access) {
       setAuthState('unauthenticated')
       return

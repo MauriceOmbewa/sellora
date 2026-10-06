@@ -258,8 +258,12 @@ function AppContent() {
 }
 
 export default function App() {
+  // Detect storefront mode at the top level so AuthProvider can skip the
+  // /me network call for anonymous storefront visitors.
+  const isStorefront = !!getStorefrontSlug()
+
   return (
-    <AuthProvider>
+    <AuthProvider isStorefront={isStorefront}>
       <ToastProvider>
         <AppContent />
       </ToastProvider>

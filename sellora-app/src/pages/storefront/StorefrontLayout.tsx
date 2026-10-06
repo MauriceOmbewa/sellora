@@ -20,20 +20,54 @@
 
 import { useState } from 'react'
 import { Outlet, Link, useParams, useNavigate } from 'react-router-dom'
-import { Search, ShoppingBag, Menu, X, MessageCircle, Share2 } from 'lucide-react'
+import { Search, ShoppingBag, Menu, X, MessageCircle, Share2, LayoutDashboard, LogIn } from 'lucide-react'
 import { StorefrontProvider, useStorefront } from '@/context/StorefrontContext'
+import { useAuth } from '@/context/AuthContext'
 import LiveChatWidget from '@/components/storefront/LiveChatWidget'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the absolute URL to the admin dashboard.
+ * In subdomain mode (kladi-collections.sellora.co.ke) we navigate to the
+ * root SaaS domain. In path/dev mode we just use a root-relative path.
+ */
+function getDashboardUrl(): string {
+  const SAAS_DOMAIN = import.meta.env.VITE_SAAS_DOMAIN ?? ''
+  if (SAAS_DOMAIN) {
+    const host = window.location.hostname
+    if (host !== SAAS_DOMAIN && host.endsWith(`.${SAAS_DOMAIN}`)) {
+      // We're on a subdomain — send the owner to the root domain
+      return `${window.location.protocol}//${SAAS_DOMAIN}/businesses`
+    }
+  }
+  // Path mode or local dev — same origin
+  return '/businesses'
+}
+
+function getLoginUrl(): string {
+  const SAAS_DOMAIN = import.meta.env.VITE_SAAS_DOMAIN ?? ''
+  if (SAAS_DOMAIN) {
+    const host = window.location.hostname
+    if (host !== SAAS_DOMAIN && host.endsWith(`.${SAAS_DOMAIN}`)) {
+      return `${window.location.protocol}//${SAAS_DOMAIN}/login`
+    }
+  }
+  return '/login'
+}
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 
 function StorefrontNav() {
   const { business, cart, basePath } = useStorefront()
+  const { authState, user }          = useAuth()
   const [mobileOpen, setMobileOpen]  = useState(false)
   const [searchOpen, setSearchOpen]  = useState(false)
   const navigate                     = useNavigate()
 
-  const primary   = business?.theme.primaryColor ?? '#C79A3D'
-  const itemCount = cart.items.reduce((s, i) => s + i.quantity, 0)
+  const primary      = business?.theme.primaryColor ?? '#C79A3D'
+  const itemCount    = cart.items.reduce((s, i) => s + i.quantity, 0)
+  const isLoggedIn   = authState === 'authenticated' || authState === 'needs-onboarding'
 
   const navLinks = [
     { label: 'Home',    to: basePath },
@@ -102,6 +136,30 @@ function StorefrontNav() {
               </a>
             )}
 
+            {/* Login / Dashboard — shown to visitors; hidden when loading to avoid flash */}
+            {authState !== 'loading' && (
+              isLoggedIn ? (
+                <a
+                  href={getDashboardUrl()}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-semibold text-ink border border-sand rounded-full hover:bg-sand transition-colors"
+                  aria-label="Go to dashboard"
+                  title={`Signed in as ${user?.name ?? 'you'}`}
+                >
+                  <LayoutDashboard size={13} />
+                  Dashboard
+                </a>
+              ) : (
+                <a
+                  href={getLoginUrl()}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-semibold text-ink/50 border border-sand/60 rounded-full hover:text-ink hover:border-sand hover:bg-sand/50 transition-colors"
+                  aria-label="Sign in to your store"
+                >
+                  <LogIn size={13} />
+                  Login
+                </a>
+              )
+            )}
+
             <Link to={`${basePath}/cart`}
               className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-sand"
               aria-label={`Cart (${itemCount} items)`}>
@@ -150,9 +208,25 @@ function StorefrontNav() {
             {business?.contact.whatsapp && (
               <a href={`https://wa.me/${business.contact.whatsapp.replace(/\D/g, '')}`}
                 target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 py-3 text-[15px] font-medium text-green">
+                className="flex items-center gap-2 py-3 text-[15px] font-medium text-green border-b border-sand">
                 <MessageCircle size={16} /> Order via WhatsApp
               </a>
+            )}
+            {/* Mobile login / dashboard */}
+            {authState !== 'loading' && (
+              isLoggedIn ? (
+                <a href={getDashboardUrl()}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 py-3 text-[14px] font-semibold text-ink">
+                  <LayoutDashboard size={16} /> My Dashboard
+                </a>
+              ) : (
+                <a href={getLoginUrl()}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 py-3 text-[14px] font-medium text-ink/60">
+                  <LogIn size={16} /> Login
+                </a>
+              )
             )}
           </div>
         )}

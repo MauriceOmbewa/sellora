@@ -2,21 +2,13 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DollarSign, ShoppingBag, Users, Package,
-  TrendingUp, AlertTriangle, ArrowRight, ExternalLink,
-  Copy, Share2, Check, Globe,
+  TrendingUp, AlertTriangle, ArrowRight,
 } from 'lucide-react'
-import { KpiCard, Badge, Avatar, BarChart, Sparkline, Skeleton } from '@/components/ui'
+import { KpiCard, Badge, Avatar, BarChart, Sparkline, Skeleton, StorefrontStatusCard } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { analyticsService, orderService, inventoryService } from '@/services/remainingServices'
 import { businessService } from '@/services/businessService'
 import type { AnalyticsSummary, Order, InventoryItem, StorefrontSettings } from '@/types'
-
-const SAAS_DOMAIN = import.meta.env.VITE_SAAS_DOMAIN ?? ''
-
-function buildStorefrontUrl(slug: string): string {
-  if (SAAS_DOMAIN) return `https://${slug}.${SAAS_DOMAIN}`
-  return `${window.location.origin}/store/${slug}`
-}
 
 const fmtKes = (n: number) =>
   n >= 1_000_000 ? `KSh ${(n / 1_000_000).toFixed(1)}M`
@@ -25,99 +17,6 @@ const fmtKes = (n: number) =>
 
 const payVariant: Record<string, 'success'|'warning'|'danger'|'outline'> = {
   paid: 'success', pending: 'warning', failed: 'danger', refunded: 'outline',
-}
-
-// ── Storefront live card ──────────────────────────────────────────────────────
-
-function StorefrontLiveCard({ slug, name }: { slug: string; name: string }) {
-  const url                         = buildStorefrontUrl(slug)
-  const [copied, setCopied]         = useState(false)
-  const [canShare]                  = useState(() => typeof navigator.share === 'function')
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard API unavailable — select the text as fallback
-      const el = document.createElement('textarea')
-      el.value = url
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
-  const handleShare = async () => {
-    if (canShare) {
-      try {
-        await navigator.share({
-          title: `${name} — Sellora Store`,
-          text:  `Shop at ${name} on Sellora`,
-          url,
-        })
-        return
-      } catch {
-        // User cancelled or share failed — fall through to copy
-      }
-    }
-    // Fallback: copy to clipboard
-    await handleCopy()
-  }
-
-  return (
-    <div className="bg-white border border-sand rounded-[14px] p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-2 h-2 rounded-full bg-green animate-pulse shrink-0" />
-        <h3 className="font-serif text-[17px] font-medium text-ink">Your store is live</h3>
-      </div>
-
-      {/* URL display */}
-      <div className="flex items-center gap-2 bg-ivory border border-sand rounded-[10px] px-3 py-2.5 mb-3">
-        <Globe size={13} className="text-slate shrink-0" />
-        <span className="text-[13px] text-ink font-medium truncate flex-1">{url}</span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-slate hover:text-ink transition-colors shrink-0"
-          aria-label="Open store in new tab"
-        >
-          <ExternalLink size={13} />
-        </a>
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={handleCopy}
-          className={[
-            'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[9px] text-[13px] font-semibold border transition-all',
-            copied
-              ? 'bg-green-light border-green/30 text-green'
-              : 'bg-white border-sand text-ink hover:border-ink',
-          ].join(' ')}
-          aria-label="Copy store URL"
-        >
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied!' : 'Copy link'}
-        </button>
-
-        <button
-          onClick={handleShare}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-ink text-ivory rounded-[9px] text-[13px] font-semibold hover:bg-ink-soft transition-colors"
-          aria-label="Share store"
-        >
-          <Share2 size={13} />
-          {canShare ? 'Share' : 'Copy & share'}
-        </button>
-      </div>
-    </div>
-  )
 }
 
 export default function OverviewPage() {
@@ -175,11 +74,7 @@ export default function OverviewPage() {
             {greeting}, {firstName}
           </h1>
           <p className="text-[13.5px] text-slate mt-1">
-            {currentBusiness?.name} ·{' '}
-            <a href={`/store/${currentBusiness?.slug}`} target="_blank" rel="noreferrer"
-              className="hover:text-ink transition-colors inline-flex items-center gap-1">
-              {currentBusiness?.slug}.sellora.co.ke <ExternalLink size={11} />
-            </a>
+            {currentBusiness?.name}
           </p>
         </div>
         <div className="flex gap-1 bg-ivory border border-sand rounded-[9px] p-1">
@@ -345,13 +240,15 @@ export default function OverviewPage() {
           )}
         </div>
 
-        {/* Right column: storefront card (published only) + needs attention */}
+        {/* Right column: storefront card (always) + needs attention */}
         <div className="space-y-5">
-          {/* Storefront live card — only shown when storefront is published */}
-          {sfSettings?.isPublished && currentBusiness && (
-            <StorefrontLiveCard
+          {currentBusiness && (
+            <StorefrontStatusCard
               slug={currentBusiness.slug}
               name={currentBusiness.name}
+              isPublished={sfSettings?.isPublished ?? false}
+              isLoading={sfSettings === null}
+              publishHref="/app/storefront"
             />
           )}
 

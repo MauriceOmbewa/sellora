@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Package, Edit, Trash2, Eye } from 'lucide-react'
+import { Plus, Package, Edit, Trash2, Eye, Store } from 'lucide-react'
 import {
-  Badge, Button, PageHeader, SearchInput,
+  Badge, Button, PageHeader, SearchInput, Toggle,
   EmptyState, ConfirmModal, useToast, Skeleton,
 } from '@/components/ui'
 import { productService, categoryService } from '@/services/productService'
@@ -25,12 +25,16 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
 
-  const [search, setSearch]           = useState('')
-  const [catFilter, setCatFilter]     = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [view, setView]               = useState<'table' | 'grid'>('table')
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
-  const [deleting, setDeleting]       = useState(false)
+  const [search, setSearch]               = useState('')
+  const [catFilter, setCatFilter]         = useState('')
+  const [statusFilter, setStatusFilter]   = useState('')
+  const [marketFilter, setMarketFilter]   = useState('')   // '' | 'visible' | 'hidden'
+  const [view, setView]                   = useState<'table' | 'grid'>('table')
+  const [deleteTarget, setDeleteTarget]   = useState<Product | null>(null)
+  const [deleting, setDeleting]           = useState(false)
+
+  // Per-product marketplace toggle — tracks which product ids are mid-update
+  const [togglingIds, setTogglingIds]     = useState<Set<string>>(new Set())
 
   const load = useCallback(async (pg = 1) => {
     if (!currentBusiness) return
@@ -74,6 +78,67 @@ export default function ProductsPage() {
     }
   }
 
+  // ── Per-product marketplace visibility toggle ─────────────────────────────
+
+  const toggleMarketplace = async (product: Product) => {
+    if (!currentBusiness || togglingIds.has(product.id)) return
+    const newValue = !product.marketplaceVisible
+
+    // Optimistic update
+    setProducts(prev => prev.map(p =>
+      p.id === product.id ? { ...p, marketplaceVisible: newValue } : p
+    ))
+    setTogglingIds(prev => new Set(prev).add(product.id))
+
+    try {
+      await productService.update(currentBusiness.id, product.id, {
+        marketplace_visible: newValue,
+      })
+    } catch (err: unknown) {
+      // Revert
+      setProducts(prev => prev.map(p =>
+        p.id === product.id ? { ...p, marketplaceVisible: !newValue } : p
+      ))
+      toast('error', 'Could not update marketplace visibility', err instanceof Error ? err.message : '')
+    } finally {
+      setTogglingIds(prev => { const s = new Set(prev); s.delete(product.id); return s })
+    }
+  }
+
+  // ── Bulk marketplace actions ──────────────────────────────────────────────
+
+  const bulkSetMarketplace = async (visible: boolean) => {
+    if (!currentBusiness) return
+    const targets = products.filter(p => p.marketplaceVisible !== visible)
+    if (!targets.length) return
+
+    // Optimistic
+    setProducts(prev => prev.map(p => ({ ...p, marketplaceVisible: visible })))
+
+    const failed: string[] = []
+    await Promise.all(targets.map(async p => {
+      try {
+        await productService.update(currentBusiness.id, p.id, { marketplace_visible: visible })
+      } catch {
+        failed.push(p.name)
+      }
+    }))
+
+    if (failed.length) {
+      // Revert failed ones
+      setProducts(prev => prev.map(p =>
+        failed.includes(p.name) ? { ...p, marketplaceVisible: !visible } : p
+      ))
+      toast('error', `${failed.length} product${failed.length > 1 ? 's' : ''} could not be updated`)
+    } else {
+      toast('success',
+        visible ? 'All products added to marketplace' : 'All products removed from marketplace',
+      )
+    }
+  }
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+
   const stockBadge = (p: Product) => {
     if (p.stockQuantity === 0)                         return <Badge variant="danger">Out of stock</Badge>
     if (p.stockQuantity <= p.lowStockThreshold)        return <Badge variant="warning">{p.stockQuantity} left</Badge>
@@ -82,8 +147,16 @@ export default function ProductsPage() {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
-  // Count hidden products (draft or archived) in current view
   const hiddenCount = products.filter(p => p.status !== 'active' || !p.isAvailable).length
+
+  // Client-side marketplace filter (fast, no extra API call)
+  const filteredProducts = products.filter(p => {
+    if (marketFilter === 'visible') return p.marketplaceVisible
+    if (marketFilter === 'hidden')  return !p.marketplaceVisible
+    return true
+  })
+
+  const marketplaceVisibleCount = products.filter(p => p.marketplaceVisible).length
 
   return (
     <div className="space-y-5 fade-in">
@@ -97,7 +170,7 @@ export default function ProductsPage() {
         }
       />
 
-      {/* Warn about hidden products so owners know why storefront looks empty */}
+      {/* Hidden products warning */}
       {!loading && hiddenCount > 0 && !statusFilter && (
         <div className="bg-gold-light border border-gold/30 rounded-[12px] px-4 py-3 flex items-start gap-3">
           <span className="text-[15px] shrink-0">⚠️</span>
@@ -111,6 +184,37 @@ export default function ProductsPage() {
           </p>
         </div>
       )}
+
+      {/* Marketplace summary + bulk actions */}
+      {!loading && products.length > 0 && (
+        <div className="bg-white border border-sand rounded-[12px] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-[8px] bg-gold-light flex items-center justify-center shrink-0">
+              <Store size={14} className="text-gold-deep" />
+            </div>
+            <p className="text-[13px] text-ink">
+              <strong>{marketplaceVisibleCount}</strong> of <strong>{products.length}</strong> products visible in the Sellora marketplace
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => bulkSetMarketplace(true)}
+              disabled={marketplaceVisibleCount === products.length}
+              className="px-3 py-1.5 text-[12.5px] font-semibold border border-sand rounded-[8px] hover:border-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Publish all
+            </button>
+            <button
+              onClick={() => bulkSetMarketplace(false)}
+              disabled={marketplaceVisibleCount === 0}
+              className="px-3 py-1.5 text-[12.5px] font-semibold border border-sand rounded-[8px] hover:border-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Remove all
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white border border-sand rounded-[14px] p-4">
         <div className="flex flex-wrap gap-3 items-center">
@@ -137,6 +241,15 @@ export default function ProductsPage() {
             <option value="active">Active</option>
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
+          </select>
+          <select
+            value={marketFilter}
+            onChange={e => setMarketFilter(e.target.value)}
+            className="bg-white border border-sand rounded-[8px] px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-gold/20"
+          >
+            <option value="">All marketplace</option>
+            <option value="visible">In marketplace</option>
+            <option value="hidden">Not in marketplace</option>
           </select>
           <div className="ml-auto flex gap-1 bg-ivory border border-sand rounded-[8px] p-1">
             {(['table', 'grid'] as const).map(v => (
@@ -165,15 +278,15 @@ export default function ProductsPage() {
             </div>
           ))}
         </div>
-      ) : products.length === 0 ? (
+      ) : filteredProducts.length === 0 ? (
         <div className="bg-white border border-sand rounded-[14px]">
           <EmptyState
             icon={<Package size={22} />}
-            title={search || catFilter || statusFilter ? 'No products found' : 'No products yet'}
-            description={search || catFilter || statusFilter
+            title={search || catFilter || statusFilter || marketFilter ? 'No products found' : 'No products yet'}
+            description={search || catFilter || statusFilter || marketFilter
               ? 'Try adjusting your search or filters.'
               : 'Add your first product to start selling.'}
-            action={!search && !catFilter && !statusFilter
+            action={!search && !catFilter && !statusFilter && !marketFilter
               ? { label: 'Add Product', onClick: () => navigate('/app/products/new') }
               : undefined}
           />
@@ -181,16 +294,16 @@ export default function ProductsPage() {
       ) : view === 'table' ? (
         <div className="bg-white border border-sand rounded-[14px] overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-[800px]">
               <thead>
                 <tr className="border-b border-sand bg-ivory/50">
-                  {['Product', 'Category', 'Price', 'Stock', 'Sales', 'Status', ''].map(h => (
+                  {['Product', 'Category', 'Price', 'Stock', 'Sales', 'Status', 'Marketplace', ''].map(h => (
                     <th key={h} className="text-left text-[11px] font-semibold text-slate py-3.5 px-4 first:pl-5 last:pr-5 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {products.map(p => (
+                {filteredProducts.map(p => (
                   <tr key={p.id} className="border-b border-sand last:border-0 hover:bg-ivory/40 group">
                     <td className="py-3.5 pl-5 pr-4">
                       <div className="flex items-center gap-3">
@@ -213,6 +326,20 @@ export default function ProductsPage() {
                     <td className="py-3.5 pr-4">
                       <Badge variant={statusVariant[p.status] ?? 'outline'}>{p.status}</Badge>
                     </td>
+                    {/* Marketplace toggle column */}
+                    <td className="py-3.5 pr-4">
+                      <div className="flex items-center gap-2">
+                        <Toggle
+                          checked={p.marketplaceVisible}
+                          onChange={() => toggleMarketplace(p)}
+                          disabled={togglingIds.has(p.id) || p.status !== 'active' || !p.isAvailable}
+                          size="sm"
+                        />
+                        {(p.status !== 'active' || !p.isAvailable) && (
+                          <span className="text-[10.5px] text-slate" title="Product must be active and available">inactive</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3.5 pr-5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => navigate(`/app/products/${p.id}`)} className="p-1.5 text-slate hover:text-ink hover:bg-sand rounded-[6px]" title="Edit"><Edit size={14} /></button>
@@ -233,20 +360,10 @@ export default function ProductsPage() {
                 Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
               </p>
               <div className="flex gap-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => load(page - 1)}
-                  className="px-3 py-1.5 text-[13px] border border-sand rounded-[7px] disabled:opacity-40 hover:border-ink"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => load(page + 1)}
-                  className="px-3 py-1.5 text-[13px] border border-sand rounded-[7px] disabled:opacity-40 hover:border-ink"
-                >
-                  Next
-                </button>
+                <button disabled={page === 1} onClick={() => load(page - 1)}
+                  className="px-3 py-1.5 text-[13px] border border-sand rounded-[7px] disabled:opacity-40 hover:border-ink">Previous</button>
+                <button disabled={page === totalPages} onClick={() => load(page + 1)}
+                  className="px-3 py-1.5 text-[13px] border border-sand rounded-[7px] disabled:opacity-40 hover:border-ink">Next</button>
               </div>
             </div>
           )}
@@ -254,7 +371,7 @@ export default function ProductsPage() {
       ) : (
         /* Grid view */
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {products.map(p => (
+          {filteredProducts.map(p => (
             <div key={p.id} className="bg-white border border-sand rounded-[14px] overflow-hidden hover:border-ink/20 transition-all group">
               <div className="relative aspect-square bg-sand overflow-hidden">
                 {p.images[0] && <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />}
@@ -267,11 +384,24 @@ export default function ProductsPage() {
               <div className="p-4">
                 <p className="text-[13.5px] font-semibold text-ink mb-0.5">{p.name}</p>
                 <p className="text-[12px] text-slate mb-3">{p.categoryName || '—'}</p>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <p className="font-serif text-[16px] font-semibold text-ink">KSh {p.sellingPrice.toLocaleString()}</p>
                   {stockBadge(p)}
                 </div>
-                <div className="flex gap-2 mt-3">
+                {/* Marketplace toggle in grid */}
+                <div className="flex items-center justify-between py-2 border-t border-sand">
+                  <div className="flex items-center gap-1.5">
+                    <Store size={12} className={p.marketplaceVisible ? 'text-gold-deep' : 'text-slate/40'} />
+                    <span className="text-[11.5px] text-slate">Marketplace</span>
+                  </div>
+                  <Toggle
+                    checked={p.marketplaceVisible}
+                    onChange={() => toggleMarketplace(p)}
+                    disabled={togglingIds.has(p.id) || p.status !== 'active' || !p.isAvailable}
+                    size="sm"
+                  />
+                </div>
+                <div className="flex gap-2 mt-2">
                   <button onClick={() => navigate(`/app/products/${p.id}`)} className="flex-1 py-2 text-[12.5px] font-semibold text-center border border-sand rounded-[7px] hover:border-ink hover:bg-ivory transition-colors">Edit</button>
                   <button onClick={() => setDeleteTarget(p)} className="px-3 py-2 text-[12.5px] text-red border border-red-light rounded-[7px] hover:bg-red-light transition-colors"><Trash2 size={13} /></button>
                 </div>

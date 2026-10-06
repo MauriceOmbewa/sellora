@@ -41,6 +41,7 @@ interface ProductApiObject {
   status: 'active' | 'draft' | 'archived'
   is_featured: boolean
   is_available: boolean
+  marketplace_visible: boolean
   badge: string
   tags: string[]
   total_sold: number
@@ -82,6 +83,7 @@ function mapProduct(raw: ProductApiObject): Product {
     status: raw.status,
     isFeatured: raw.is_featured,
     isAvailable: raw.is_available,
+    marketplaceVisible: raw.marketplace_visible ?? true,
     badge: (raw.badge || undefined) as Product['badge'],
     tags: raw.tags ?? [],
     totalSold: raw.total_sold,
@@ -120,6 +122,7 @@ export interface CreateProductPayload {
   status?: 'active' | 'draft' | 'archived'
   is_featured?: boolean
   is_available?: boolean
+  marketplace_visible?: boolean
   images?: string[]
   badge?: string
   tags?: string[]

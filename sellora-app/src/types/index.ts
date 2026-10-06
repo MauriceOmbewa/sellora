@@ -132,6 +132,8 @@ export interface Product {
   status: ProductStatus
   isFeatured: boolean
   isAvailable: boolean
+  /** Whether this product appears in the Sellora marketplace. Default true. */
+  marketplaceVisible: boolean
   totalSold: number
   badge?: 'new' | 'best-seller' | 'sale' | 'limited'
   salePrice?: number

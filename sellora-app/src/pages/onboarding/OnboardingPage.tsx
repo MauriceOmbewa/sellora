@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, ArrowRight, ArrowLeft, Upload, Globe } from 'lucide-react'
+import { Check, ArrowRight, ArrowLeft, Upload, Globe, X, Loader2 } from 'lucide-react'
 import { Input, Textarea, Select, ColorPicker, Button, useToast } from '@/components/ui'
 import { businessService } from '@/services/businessService'
+import { uploadService, validateImageAsync } from '@/services/uploadService'
 import { useAuth } from '@/context/AuthContext'
 import type { BusinessCategory } from '@/types'
 
@@ -26,6 +27,8 @@ interface FormData {
   motto: string
   primaryColor: string
   accentColor: string
+  /** CDN URL of the uploaded logo (empty string = no logo) */
+  logo: string
   phone: string
   whatsapp: string
   email: string
@@ -43,6 +46,7 @@ const defaultForm: FormData = {
   motto: '',
   primaryColor: '#C79A3D',
   accentColor: '#3F6B4F',
+  logo: '',
   phone: '',
   whatsapp: '',
   email: '',
@@ -157,20 +161,76 @@ function Step1({ form, update }: { form: FormData; update: (k: keyof FormData, v
 
 // ── Step 2: Brand ─────────────────────────────────────────────────────────────
 function Step2({ form, update }: { form: FormData; update: (k: keyof FormData, v: string) => void }) {
+  const fileRef               = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const { toast } = useToast()
+
+  const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError('')
+
+    const err = await validateImageAsync(file)
+    if (err) { setUploadError(err); return }
+
+    setUploading(true)
+    try {
+      const url = await uploadService.uploadImage(file, 'logos')
+      update('logo', url)
+      toast('success', 'Logo uploaded')
+    } catch (uploadErr: unknown) {
+      const msg = uploadErr instanceof Error ? uploadErr.message : 'Upload failed'
+      setUploadError(msg)
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Logo upload */}
       <div>
         <label className="block text-[13px] font-semibold text-ink mb-1.5">Business logo</label>
-        <div className="border-2 border-dashed border-sand rounded-[12px] p-8 flex flex-col items-center justify-center gap-3 hover:border-ink/30 cursor-pointer transition-colors bg-white">
-          <div className="w-10 h-10 rounded-[10px] bg-ivory border border-sand flex items-center justify-center">
-            <Upload size={18} className="text-slate" />
-          </div>
-          <div className="text-center">
-            <p className="text-[13.5px] font-semibold text-ink">Upload your logo</p>
-            <p className="text-[12px] text-slate mt-0.5">PNG, JPG or SVG. Max 2MB.</p>
-          </div>
+        <div
+          onClick={() => !uploading && fileRef.current?.click()}
+          className={[
+            'relative border-2 border-dashed rounded-[12px] transition-colors bg-white',
+            uploading ? 'border-sand cursor-not-allowed' : 'border-sand hover:border-ink/40 cursor-pointer',
+            form.logo ? 'p-4' : 'p-8',
+          ].join(' ')}
+        >
+          {form.logo ? (
+            <div className="flex items-center gap-4">
+              <img src={form.logo} alt="Business logo" className="w-16 h-16 rounded-[10px] object-cover border border-sand" />
+              <div className="flex-1">
+                <p className="text-[13.5px] font-semibold text-ink">Logo uploaded</p>
+                <p className="text-[12px] text-slate mt-0.5">Click to replace</p>
+              </div>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); update('logo', '') }}
+                className="w-7 h-7 rounded-full bg-sand flex items-center justify-center hover:bg-red-light hover:text-red transition-colors"
+                aria-label="Remove logo"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3">
+              <div className="w-10 h-10 rounded-[10px] bg-ivory border border-sand flex items-center justify-center">
+                {uploading ? <Loader2 size={18} className="text-slate animate-spin" /> : <Upload size={18} className="text-slate" />}
+              </div>
+              <div className="text-center">
+                <p className="text-[13.5px] font-semibold text-ink">{uploading ? 'Uploading…' : 'Upload your logo'}</p>
+                <p className="text-[12px] text-slate mt-0.5">JPEG, PNG, WebP · max 5 MB · optional</p>
+              </div>
+            </div>
+          )}
         </div>
+        {uploadError && <p className="text-[12px] text-red mt-1.5">{uploadError}</p>}
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleLogoFile} />
       </div>
 
       <Input
@@ -344,6 +404,7 @@ export default function OnboardingPage() {
         category: form.category as BusinessCategory,
         description: form.description || undefined,
         motto: form.motto || undefined,
+        logo: form.logo || undefined,
         theme: {
           primaryColor: form.primaryColor,
           primaryHover: form.primaryColor,

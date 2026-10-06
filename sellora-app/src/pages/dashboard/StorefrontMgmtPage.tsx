@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ExternalLink,
   Monitor,
@@ -18,6 +18,12 @@ import {
   Check,
   ChevronDown,
   Store,
+  AlertTriangle,
+  RotateCcw,
+  Save,
+  Upload,
+  X,
+  Loader2,
 } from 'lucide-react'
 import {
   Button,
@@ -28,14 +34,17 @@ import {
   ColorPicker,
   useToast,
   PageHeader,
+  StorefrontStatusCard,
 } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { businessService } from '@/services/businessService'
+import { uploadService, validateImageAsync } from '@/services/uploadService'
 import {
   paymentService,
   type PaymentConfiguration,
 } from '@/services/paymentService'
 import { ApiError } from '@/services/api'
+import { useNavigate, useLocation } from 'react-router-dom'
 import type { StorefrontSettings } from '@/types'
 
 type ViewportSize = 'desktop' | 'tablet' | 'mobile'
@@ -296,6 +305,7 @@ function StorefrontPreview({
 export default function StorefrontMgmtPage() {
   const { currentBusiness, refreshBusinesses } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('preview')
   const [viewport, setViewport] =
@@ -305,6 +315,100 @@ export default function StorefrontMgmtPage() {
   const [storefrontSettings, setStorefrontSettings] =
     useState<StorefrontSettings | null>(null)
   const [sfLoading, setSfLoading] = useState(false)
+
+  // ── Dirty / unsaved-changes tracking ──────────────────────────────────────
+  // We keep a "committed" snapshot of the form values as they existed when
+  // the page loaded (or after a successful save). isDirty is true whenever
+  // the current form differs from that snapshot.
+
+  const committed = useRef({
+    brandForm: {
+      name:         currentBusiness?.name ?? '',
+      motto:        currentBusiness?.motto ?? '',
+      primaryColor: currentBusiness?.theme?.primaryColor ?? '#C79A3D',
+      accentColor:  currentBusiness?.theme?.accentColor ?? '#3F6B4F',
+    },
+    homeForm: {
+      heading:    currentBusiness?.hero?.heading ?? '',
+      subheading: currentBusiness?.hero?.subheading ?? '',
+      ctaText:    currentBusiness?.hero?.ctaText ?? 'Shop Now',
+      aboutText:  currentBusiness?.aboutText ?? '',
+    },
+    contactForm: {
+      phone:        currentBusiness?.contact?.phone ?? '',
+      whatsapp:     currentBusiness?.contact?.whatsapp ?? '',
+      email:        currentBusiness?.contact?.email ?? '',
+      address:      currentBusiness?.contact?.address ?? '',
+      openingHours: currentBusiness?.contact?.openingHours ?? '',
+    },
+    socialForm: {
+      instagram: currentBusiness?.socialLinks?.instagram ?? '',
+      tiktok:    currentBusiness?.socialLinks?.tiktok ?? '',
+      facebook:  currentBusiness?.socialLinks?.facebook ?? '',
+      twitter:   currentBusiness?.socialLinks?.twitter ?? '',
+      youtube:   currentBusiness?.socialLinks?.youtube ?? '',
+    },
+  })
+
+  const [isDirty, setIsDirty] = useState(false)
+
+  // Show browser unload warning when dirty
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
+  // Intercept in-app navigation when dirty.
+  // We override navigate() so any attempt to leave shows our modal first.
+  const [pendingNav, setPendingNav] = useState<string | null>(null)
+
+  const guardedNavigate = useCallback((to: string) => {
+    if (isDirty) {
+      setPendingNav(to)
+    } else {
+      navigate(to)
+    }
+  }, [isDirty, navigate])
+
+  // Also intercept browser back/forward (popstate) when dirty
+  useEffect(() => {
+    const handler = (e: PopStateEvent) => {
+      if (isDirty) {
+        // Push the current state back to prevent the navigation
+        window.history.pushState(null, '', location.pathname)
+        setPendingNav('__back__')
+      }
+    }
+    window.addEventListener('popstate', handler)
+    return () => window.removeEventListener('popstate', handler)
+  }, [isDirty, location.pathname])
+
+  // Intercept all in-app link clicks when dirty (catches sidebar NavLinks)
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a')
+      if (!target) return
+      const href = target.getAttribute('href')
+      if (!href || href.startsWith('http') || href.startsWith('#')) return
+      // It's an in-app link — intercept
+      e.preventDefault()
+      e.stopPropagation()
+      setPendingNav(href)
+    }
+    document.addEventListener('click', handler, true) // capture phase
+    return () => document.removeEventListener('click', handler, true)
+  }, [isDirty])
+
+  // ── Unsaved-changes modal ──────────────────────────────────────────────────
+  // Rendered below; controlled by pendingNav
+
 
   // ── Payment state ──────────────────────────────────────────────────────────
 
@@ -331,7 +435,7 @@ export default function StorefrontMgmtPage() {
 
   // ── Editable local state ──────────────────────────────────────────────────
 
-  const [brandForm, setBrandForm] = useState({
+  const [brandForm, _setBrandForm] = useState({
     name: currentBusiness?.name ?? '',
     motto: currentBusiness?.motto ?? '',
     primaryColor:
@@ -340,14 +444,14 @@ export default function StorefrontMgmtPage() {
       currentBusiness?.theme?.accentColor ?? '#3F6B4F',
   })
 
-  const [homeForm, setHomeForm] = useState({
+  const [homeForm, _setHomeForm] = useState({
     heading: currentBusiness?.hero?.heading ?? '',
     subheading: currentBusiness?.hero?.subheading ?? '',
     ctaText: currentBusiness?.hero?.ctaText ?? 'Shop Now',
     aboutText: currentBusiness?.aboutText ?? '',
   })
 
-  const [contactForm, setContactForm] = useState({
+  const [contactForm, _setContactForm] = useState({
     phone: currentBusiness?.contact?.phone ?? '',
     whatsapp: currentBusiness?.contact?.whatsapp ?? '',
     email: currentBusiness?.contact?.email ?? '',
@@ -356,7 +460,7 @@ export default function StorefrontMgmtPage() {
       currentBusiness?.contact?.openingHours ?? '',
   })
 
-  const [socialForm, setSocialForm] = useState({
+  const [socialForm, _setSocialForm] = useState({
     instagram:
       currentBusiness?.socialLinks?.instagram ?? '',
     tiktok: currentBusiness?.socialLinks?.tiktok ?? '',
@@ -368,52 +472,85 @@ export default function StorefrontMgmtPage() {
       currentBusiness?.socialLinks?.youtube ?? '',
   })
 
-  // Sync local state when business changes
+  // Dirty-aware setters
+  const setBrandForm:   typeof _setBrandForm   = useCallback(fn => { _setBrandForm(fn);   setIsDirty(true) }, [])
+  const setHomeForm:    typeof _setHomeForm    = useCallback(fn => { _setHomeForm(fn);    setIsDirty(true) }, [])
+  const setContactForm: typeof _setContactForm = useCallback(fn => { _setContactForm(fn); setIsDirty(true) }, [])
+  const setSocialForm:  typeof _setSocialForm  = useCallback(fn => { _setSocialForm(fn);  setIsDirty(true) }, [])
+
+  // ── Logo upload state ─────────────────────────────────────────────────────
+  // Separate from brandForm because it is uploaded independently (not a text field)
+
+  const [logoUrl, setLogoUrl]           = useState<string>(currentBusiness?.logo ?? '')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError]       = useState('')
+  const logoFileRef                     = useRef<HTMLInputElement>(null)
+
+  const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoError('')
+    const err = await validateImageAsync(file)
+    if (err) { setLogoError(err); return }
+    setLogoUploading(true)
+    try {
+      const url = await uploadService.uploadImage(file, 'logos')
+      setLogoUrl(url)
+      setIsDirty(true)
+    } catch (uploadErr: unknown) {
+      setLogoError(uploadErr instanceof Error ? uploadErr.message : 'Upload failed')
+    } finally {
+      setLogoUploading(false)
+      if (logoFileRef.current) logoFileRef.current.value = ''
+    }
+  }
+
+  const handleRemoveLogo = () => {
+    setLogoUrl('')
+    setIsDirty(true)
+  }
+
+  // Sync local state when business changes (e.g. after switching businesses)
   useEffect(() => {
     if (!currentBusiness) return
 
-    setBrandForm({
-      name: currentBusiness.name,
-      motto: currentBusiness.motto,
-      primaryColor:
-        currentBusiness.theme?.primaryColor ?? '#C79A3D',
-      accentColor:
-        currentBusiness.theme?.accentColor ?? '#3F6B4F',
-    })
+    const next = {
+      brandForm: {
+        name:         currentBusiness.name,
+        motto:        currentBusiness.motto,
+        primaryColor: currentBusiness.theme?.primaryColor ?? '#C79A3D',
+        accentColor:  currentBusiness.theme?.accentColor ?? '#3F6B4F',
+      },
+      homeForm: {
+        heading:    currentBusiness.hero?.heading ?? '',
+        subheading: currentBusiness.hero?.subheading ?? '',
+        ctaText:    currentBusiness.hero?.ctaText ?? 'Shop Now',
+        aboutText:  currentBusiness.aboutText ?? '',
+      },
+      contactForm: {
+        phone:        currentBusiness.contact?.phone ?? '',
+        whatsapp:     currentBusiness.contact?.whatsapp ?? '',
+        email:        currentBusiness.contact?.email ?? '',
+        address:      currentBusiness.contact?.address ?? '',
+        openingHours: currentBusiness.contact?.openingHours ?? '',
+      },
+      socialForm: {
+        instagram: currentBusiness.socialLinks?.instagram ?? '',
+        tiktok:    currentBusiness.socialLinks?.tiktok ?? '',
+        facebook:  currentBusiness.socialLinks?.facebook ?? '',
+        twitter:   currentBusiness.socialLinks?.twitter ?? '',
+        youtube:   currentBusiness.socialLinks?.youtube ?? '',
+      },
+    }
 
-    setHomeForm({
-      heading: currentBusiness.hero?.heading ?? '',
-      subheading:
-        currentBusiness.hero?.subheading ?? '',
-      ctaText:
-        currentBusiness.hero?.ctaText ?? 'Shop Now',
-      aboutText: currentBusiness.aboutText ?? '',
-    })
-
-    setContactForm({
-      phone: currentBusiness.contact?.phone ?? '',
-      whatsapp:
-        currentBusiness.contact?.whatsapp ?? '',
-      email: currentBusiness.contact?.email ?? '',
-      address:
-        currentBusiness.contact?.address ?? '',
-      openingHours:
-        currentBusiness.contact?.openingHours ?? '',
-    })
-
-    setSocialForm({
-      instagram:
-        currentBusiness.socialLinks?.instagram ?? '',
-      tiktok:
-        currentBusiness.socialLinks?.tiktok ?? '',
-      facebook:
-        currentBusiness.socialLinks?.facebook ?? '',
-      twitter:
-        currentBusiness.socialLinks?.twitter ?? '',
-      youtube:
-        currentBusiness.socialLinks?.youtube ?? '',
-    })
-  }, [currentBusiness?.id])
+    committed.current = next
+    _setBrandForm(next.brandForm)
+    _setHomeForm(next.homeForm)
+    _setContactForm(next.contactForm)
+    _setSocialForm(next.socialForm)
+    setLogoUrl(currentBusiness.logo ?? '')
+    setIsDirty(false)
+  }, [currentBusiness?.id]) // eslint-disable-line
 
   // Load storefront section toggles
   useEffect(() => {
@@ -509,6 +646,7 @@ export default function StorefrontMgmtPage() {
       await businessService.update(currentBusiness.id, {
         name: brandForm.name,
         motto: brandForm.motto,
+        logo: logoUrl || undefined,
         theme: {
           primaryColor: brandForm.primaryColor,
           primaryHover: brandForm.primaryColor,
@@ -552,6 +690,10 @@ export default function StorefrontMgmtPage() {
       })
 
       await refreshBusinesses()
+
+      // Mark as clean — snapshot the saved values
+      committed.current = { brandForm, homeForm, contactForm, socialForm }
+      setIsDirty(false)
 
       toast(
         'success',
@@ -830,32 +972,100 @@ export default function StorefrontMgmtPage() {
   const isPublished =
     storefrontSettings?.isPublished ?? false
 
+  // ── Discard changes ───────────────────────────────────────────────────────
+
+  const handleDiscard = useCallback(() => {
+    const c = committed.current
+    _setBrandForm(c.brandForm)
+    _setHomeForm(c.homeForm)
+    _setContactForm(c.contactForm)
+    _setSocialForm(c.socialForm)
+    setLogoUrl(currentBusiness?.logo ?? '')
+    setIsDirty(false)
+  }, [currentBusiness?.logo])
+
   return (
     <div className="space-y-5 fade-in">
+      {/* ── Unsaved changes modal ────────────────────────────────────────── */}
+      {pendingNav !== null && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" />
+          <div className="relative w-full max-w-[420px] bg-ivory rounded-[20px] shadow-2xl p-7">
+            <div className="w-11 h-11 rounded-full bg-gold-light flex items-center justify-center mb-4">
+              <AlertTriangle size={20} className="text-gold-deep" />
+            </div>
+            <h2 className="font-serif text-[22px] text-ink mb-2">Unsaved changes</h2>
+            <p className="text-[14px] text-slate leading-relaxed mb-6">
+              You've made changes to your storefront settings that haven't been saved yet.
+              If you leave now, those changes will be lost.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={async () => {
+                  const dest = pendingNav
+                  setPendingNav(null)
+                  await handleSave()
+                  if (dest && dest !== '__back__') navigate(dest)
+                  else window.history.back()
+                }}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-gold text-ink text-[14px] font-semibold rounded-[10px] hover:bg-gold-deep transition-colors"
+              >
+                {loading
+                  ? <span className="w-4 h-4 border-2 border-ink/20 border-t-ink rounded-full animate-spin" />
+                  : <Save size={14} />
+                }
+                Save changes &amp; leave
+              </button>
+              <button
+                onClick={() => {
+                  const dest = pendingNav
+                  setPendingNav(null)
+                  handleDiscard()
+                  if (dest && dest !== '__back__') navigate(dest)
+                  else window.history.back()
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-sand text-ink text-[14px] font-semibold rounded-[10px] hover:border-ink transition-colors"
+              >
+                <RotateCcw size={14} />
+                Discard changes &amp; leave
+              </button>
+              <button
+                onClick={() => setPendingNav(null)}
+                className="w-full py-3 text-[14px] font-medium text-slate hover:text-ink transition-colors"
+              >
+                Stay on this page
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <PageHeader
         title="Storefront"
         subtitle="Manage your public-facing store"
         actions={
           <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              icon={<ExternalLink size={14} />}
-              onClick={() =>
-                window.open(
-                  `/store/${currentBusiness?.slug}`,
-                  '_blank'
-                )
-              }
-            >
-              View Live Store
-            </Button>
+            {isPublished && (
+              <Button
+                variant="outline"
+                icon={<ExternalLink size={14} />}
+                onClick={() =>
+                  window.open(
+                    `/store/${currentBusiness?.slug}`,
+                    '_blank'
+                  )
+                }
+              >
+                View Live
+              </Button>
+            )}
 
             <Button
-              variant="secondary"
+              variant={isDirty ? 'gold' : 'secondary'}
               loading={loading}
               onClick={handleSave}
             >
-              Save Changes
+              {isDirty ? '● Save Changes' : 'Save Changes'}
             </Button>
 
             {isPublished ? (
@@ -880,35 +1090,44 @@ export default function StorefrontMgmtPage() {
         }
       />
 
-      {/* Published indicator */}
-      {storefrontSettings && (
-        <div
-          className={[
-            'flex items-center gap-2 px-4 py-2 rounded-[10px] text-[13px] font-medium w-fit',
-            isPublished
-              ? 'bg-green-light text-green border border-green/20'
-              : 'bg-sand text-slate border border-sand-dark',
-          ].join(' ')}
-        >
-          <span
-            className={[
-              'w-2 h-2 rounded-full',
-              isPublished ? 'bg-green' : 'bg-slate',
-            ].join(' ')}
-          />
+      {/* Storefront status card — always visible */}
+      <StorefrontStatusCard
+        slug={currentBusiness?.slug ?? ''}
+        name={currentBusiness?.name ?? ''}
+        isPublished={isPublished}
+        isLoading={sfLoading && !storefrontSettings}
+        onPublish={isPublished ? undefined : handlePublish}
+        publishing={publishing}
+      />
 
-          {isPublished
-            ? 'Storefront is live'
-            : 'Storefront is offline'}
-
-          {storefrontSettings.lastPublishedAt && (
-            <span className="text-[12px] opacity-70 ml-1">
-              · Last published{' '}
-              {new Date(
-                storefrontSettings.lastPublishedAt
-              ).toLocaleDateString('en-KE')}
-            </span>
-          )}
+      {/* Sticky unsaved-changes bar */}
+      {isDirty && (
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-4 bg-gold border border-gold-deep rounded-[12px] px-5 py-3 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-ink animate-pulse shrink-0" />
+            <p className="text-[13.5px] font-semibold text-ink">
+              You have unsaved changes
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleDiscard}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-semibold text-ink/70 bg-white/40 hover:bg-white/60 rounded-[8px] transition-colors"
+            >
+              <RotateCcw size={13} /> Discard
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-4 py-2 text-[12.5px] font-semibold bg-ink text-ivory rounded-[8px] hover:bg-ink-soft transition-colors disabled:opacity-60"
+            >
+              {loading
+                ? <span className="w-3 h-3 border-2 border-ivory/20 border-t-ivory rounded-full animate-spin" />
+                : <Save size={13} />
+              }
+              Save
+            </button>
+          </div>
         </div>
       )}
 
@@ -1032,19 +1251,64 @@ export default function StorefrontMgmtPage() {
                 Business logo
               </label>
 
-              <div className="border-2 border-dashed border-sand rounded-[12px] p-6 text-center hover:border-ink/30 cursor-pointer">
-                {currentBusiness?.logo ? (
-                  <img
-                    src={currentBusiness.logo}
-                    alt=""
-                    className="w-12 h-12 rounded-full mx-auto mb-2 object-cover"
-                  />
+              <div
+                onClick={() => !logoUploading && logoFileRef.current?.click()}
+                className={[
+                  'relative border-2 border-dashed rounded-[12px] transition-colors bg-white',
+                  logoUploading ? 'border-sand cursor-not-allowed' : 'border-sand hover:border-ink/40 cursor-pointer',
+                  logoUrl ? 'p-4' : 'p-6',
+                ].join(' ')}
+              >
+                {logoUrl ? (
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={logoUrl}
+                      alt="Business logo"
+                      className="w-14 h-14 rounded-[10px] object-cover border border-sand shrink-0"
+                    />
+                    <div className="flex-1">
+                      <p className="text-[13.5px] font-semibold text-ink">Logo uploaded</p>
+                      <p className="text-[12px] text-slate mt-0.5">Click to replace · changes saved with "Save Changes"</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); handleRemoveLogo() }}
+                      className="w-7 h-7 rounded-full bg-sand flex items-center justify-center hover:bg-red-light hover:text-red transition-colors shrink-0"
+                      aria-label="Remove logo"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
                 ) : (
-                  <p className="text-[13px] text-slate">
-                    Click to upload logo (PNG, SVG, JPG)
-                  </p>
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="w-10 h-10 rounded-[10px] bg-ivory border border-sand flex items-center justify-center">
+                      {logoUploading
+                        ? <Loader2 size={18} className="text-slate animate-spin" />
+                        : <Upload size={18} className="text-slate" />}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[13.5px] font-semibold text-ink">
+                        {logoUploading ? 'Uploading…' : 'Upload your logo'}
+                      </p>
+                      <p className="text-[12px] text-slate mt-0.5">
+                        JPEG, PNG, WebP · max 5 MB · optional
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
+
+              {logoError && (
+                <p className="text-[12px] text-red mt-1.5">{logoError}</p>
+              )}
+
+              <input
+                ref={logoFileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleLogoFile}
+              />
             </div>
 
             <ColorPicker

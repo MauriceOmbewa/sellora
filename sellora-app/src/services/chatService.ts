@@ -4,6 +4,7 @@ export interface ChatVisitor {
   id: string
   name: string
   email: string
+  phone: string
   created_at: string
 }
 
@@ -29,56 +30,51 @@ interface ApiResponse<T> {
   data: T
 }
 
+// ── Storefront / visitor-side ─────────────────────────────────────────────────
+
+/**
+ * Create or retrieve a chat visitor for this storefront.
+ * Pass `visitorId` (from localStorage) to restore an existing session.
+ * `name` and `phone` are stored on the visitor record for the admin to see.
+ */
 export async function createOrGetChatVisitor(
   slug: string,
   visitorId?: string,
   name = '',
-  email = '',
+  phone = '',
 ): Promise<ChatVisitor> {
-  const body: {
-    visitor_id?: string
-    name: string
-    email: string
-  } = {
-    name,
-    email,
-  }
+  const body: Record<string, string> = { name, phone }
+  if (visitorId && visitorId !== 'undefined') body.visitor_id = visitorId
 
-  if (visitorId && visitorId !== 'undefined') {
-    body.visitor_id = visitorId
-  }
-
-  const response = await api.post<ApiResponse<ChatVisitor>>(
+  const res = await api.post<ApiResponse<ChatVisitor>>(
     `/api/v1/store/${slug}/chat/visitor/`,
     body,
+    { public: true },
   )
-
-  return response.data
+  return res.data
 }
 
 export async function createOrGetChatConversation(
   slug: string,
   visitorId: string,
 ): Promise<ChatConversation> {
-  const response = await api.post<ApiResponse<ChatConversation>>(
+  const res = await api.post<ApiResponse<ChatConversation>>(
     `/api/v1/store/${slug}/chat/conversation/`,
-    {
-      visitor_id: visitorId,
-    },
+    { visitor_id: visitorId },
+    { public: true },
   )
-
-  return response.data
+  return res.data
 }
 
 export async function getChatConversation(
   slug: string,
   visitorId: string,
 ): Promise<ChatConversation | null> {
-  const response = await api.get<ApiResponse<ChatConversation | null>>(
+  const res = await api.get<ApiResponse<ChatConversation | null>>(
     `/api/v1/store/${slug}/chat/conversation/?visitor_id=${encodeURIComponent(visitorId)}`,
+    { public: true },
   )
-
-  return response.data
+  return res.data
 }
 
 export async function getChatMessages(
@@ -86,30 +82,30 @@ export async function getChatMessages(
   conversationId: string,
   visitorId: string,
 ): Promise<ChatMessage[]> {
-  const response = await api.get<ApiResponse<ChatMessage[]>>(
+  const res = await api.get<ApiResponse<ChatMessage[]>>(
     `/api/v1/store/${slug}/chat/conversation/${conversationId}/messages/?visitor_id=${encodeURIComponent(visitorId)}`,
+    { public: true },
   )
-
-  return response.data
+  return res.data
 }
+
+// ── Business / admin side ─────────────────────────────────────────────────────
 
 export async function getBusinessChatConversations(
   businessId: string,
 ): Promise<ChatConversation[]> {
-  const response = await api.get<ApiResponse<ChatConversation[]>>(
+  const res = await api.get<ApiResponse<ChatConversation[]>>(
     `/api/v1/businesses/${businessId}/chat/conversations/`,
   )
-
-  return response.data
+  return res.data
 }
 
 export async function getBusinessChatConversation(
   businessId: string,
   conversationId: string,
 ): Promise<ChatConversation> {
-  const response = await api.get<ApiResponse<ChatConversation>>(
+  const res = await api.get<ApiResponse<ChatConversation>>(
     `/api/v1/businesses/${businessId}/chat/conversations/${conversationId}/`,
   )
-
-  return response.data
+  return res.data
 }

@@ -17,12 +17,14 @@ import {
   Send,
   Check,
   ChevronDown,
+  Store,
 } from 'lucide-react'
 import {
   Button,
   Input,
   Textarea,
   Tabs,
+  Toggle,
   ColorPicker,
   useToast,
   PageHeader,
@@ -794,6 +796,37 @@ export default function StorefrontMgmtPage() {
     { id: 'payments', label: 'Payments' },
   ]
 
+  // ── Marketplace toggle ─────────────────────────────────────────────────────
+
+  const [marketplaceToggling, setMarketplaceToggling] = useState(false)
+
+  const handleMarketplaceToggle = async (enabled: boolean) => {
+    if (!currentBusiness || !storefrontSettings) return
+    setMarketplaceToggling(true)
+    // Optimistic update
+    setStorefrontSettings(prev => prev ? { ...prev, showInMarketplace: enabled } : prev)
+    try {
+      const updated = await businessService.saveStorefrontSettings(
+        currentBusiness.id,
+        { show_in_marketplace: enabled },
+      )
+      setStorefrontSettings(updated)
+      toast(
+        'success',
+        enabled ? 'Now visible in marketplace' : 'Removed from marketplace',
+        enabled
+          ? 'Your products will appear in the Sellora marketplace.'
+          : 'Your products are no longer listed in the shared marketplace.',
+      )
+    } catch (err: unknown) {
+      // Revert on failure
+      setStorefrontSettings(prev => prev ? { ...prev, showInMarketplace: !enabled } : prev)
+      toast('error', 'Could not update marketplace setting', err instanceof Error ? err.message : 'Please try again.')
+    } finally {
+      setMarketplaceToggling(false)
+    }
+  }
+
   const isPublished =
     storefrontSettings?.isPublished ?? false
 
@@ -928,6 +961,39 @@ export default function StorefrontMgmtPage() {
             ctaText={homeForm.ctaText}
             viewport={viewport}
           />
+
+          {/* ── Marketplace visibility card */}
+          {storefrontSettings && (
+            <div className="bg-white border border-sand rounded-[14px] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-[10px] bg-gold-light flex items-center justify-center shrink-0 mt-0.5">
+                    <Store size={16} className="text-gold-deep" />
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-semibold text-ink">
+                      Sellora Marketplace
+                    </p>
+                    <p className="text-[13px] text-slate mt-0.5 max-w-lg">
+                      When on, your products appear in the shared Sellora marketplace where shoppers discover vendors.
+                      Turn off to keep your storefront live but out of the marketplace feed.
+                    </p>
+                  </div>
+                </div>
+                <Toggle
+                  checked={storefrontSettings.showInMarketplace}
+                  onChange={handleMarketplaceToggle}
+                  disabled={marketplaceToggling || !isPublished}
+                  size="md"
+                />
+              </div>
+              {!isPublished && (
+                <p className="mt-3 ml-12 text-[12px] text-slate">
+                  Publish your storefront first to enable marketplace visibility.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

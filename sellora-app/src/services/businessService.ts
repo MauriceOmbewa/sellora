@@ -87,6 +87,7 @@ export interface StorefrontSettingsApiObject {
   show_new_arrivals: boolean
   show_best_sellers: boolean
   show_testimonials: boolean
+  show_in_marketplace: boolean
   is_published: boolean
   last_published_at: string | null
   updated_at: string
@@ -152,6 +153,7 @@ export function mapStorefrontSettings(raw: StorefrontSettingsApiObject): Storefr
     showNewArrivals:      raw.show_new_arrivals,
     showBestSellers:      raw.show_best_sellers,
     showTestimonials:     raw.show_testimonials,
+    showInMarketplace:    raw.show_in_marketplace ?? true,
     isPublished:          raw.is_published,
     lastPublishedAt:      raw.last_published_at ?? undefined,
   }
@@ -202,6 +204,7 @@ export interface UpdateStorefrontPayload {
   show_new_arrivals?: boolean
   show_best_sellers?: boolean
   show_testimonials?: boolean
+  show_in_marketplace?: boolean
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────

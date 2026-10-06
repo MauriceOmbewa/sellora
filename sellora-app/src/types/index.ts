@@ -103,6 +103,8 @@ export interface StorefrontSettings {
   showNewArrivals: boolean
   showBestSellers: boolean
   showTestimonials: boolean
+  /** Whether products from this store appear in the cross-vendor marketplace. Default true. */
+  showInMarketplace: boolean
   isPublished: boolean
   lastPublishedAt?: string
 }

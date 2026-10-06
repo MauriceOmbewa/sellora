@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DollarSign, ShoppingBag, Users, Package,
   TrendingUp, AlertTriangle, ArrowRight, ExternalLink,
+  Copy, Share2, Check, Globe,
 } from 'lucide-react'
 import { KpiCard, Badge, Avatar, BarChart, Sparkline, Skeleton } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { analyticsService, orderService, inventoryService } from '@/services/remainingServices'
-import type { AnalyticsSummary, Order, InventoryItem } from '@/types'
+import { businessService } from '@/services/businessService'
+import type { AnalyticsSummary, Order, InventoryItem, StorefrontSettings } from '@/types'
+
+const SAAS_DOMAIN = import.meta.env.VITE_SAAS_DOMAIN ?? ''
+
+function buildStorefrontUrl(slug: string): string {
+  if (SAAS_DOMAIN) return `https://${slug}.${SAAS_DOMAIN}`
+  return `${window.location.origin}/store/${slug}`
+}
 
 const fmtKes = (n: number) =>
   n >= 1_000_000 ? `KSh ${(n / 1_000_000).toFixed(1)}M`
@@ -18,26 +28,121 @@ const payVariant: Record<string, 'success'|'warning'|'danger'|'outline'> = {
   paid: 'success', pending: 'warning', failed: 'danger', refunded: 'outline',
 }
 
+// ── Storefront live card ──────────────────────────────────────────────────────
+
+function StorefrontLiveCard({ slug, name }: { slug: string; name: string }) {
+  const url                         = buildStorefrontUrl(slug)
+  const [copied, setCopied]         = useState(false)
+  const [canShare]                  = useState(() => typeof navigator.share === 'function')
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard API unavailable — select the text as fallback
+      const el = document.createElement('textarea')
+      el.value = url
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleShare = async () => {
+    if (canShare) {
+      try {
+        await navigator.share({
+          title: `${name} — Sellora Store`,
+          text:  `Shop at ${name} on Sellora`,
+          url,
+        })
+        return
+      } catch {
+        // User cancelled or share failed — fall through to copy
+      }
+    }
+    // Fallback: copy to clipboard
+    await handleCopy()
+  }
+
+  return (
+    <div className="bg-white border border-sand rounded-[14px] p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-2 h-2 rounded-full bg-green animate-pulse shrink-0" />
+        <h3 className="font-serif text-[17px] font-medium text-ink">Your store is live</h3>
+      </div>
+
+      {/* URL display */}
+      <div className="flex items-center gap-2 bg-ivory border border-sand rounded-[10px] px-3 py-2.5 mb-3">
+        <Globe size={13} className="text-slate shrink-0" />
+        <span className="text-[13px] text-ink font-medium truncate flex-1">{url}</span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-slate hover:text-ink transition-colors shrink-0"
+          aria-label="Open store in new tab"
+        >
+          <ExternalLink size={13} />
+        </a>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleCopy}
+          className={[
+            'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[9px] text-[13px] font-semibold border transition-all',
+            copied
+              ? 'bg-green-light border-green/30 text-green'
+              : 'bg-white border-sand text-ink hover:border-ink',
+          ].join(' ')}
+          aria-label="Copy store URL"
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? 'Copied!' : 'Copy link'}
+        </button>
+
+        <button
+          onClick={handleShare}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-ink text-ivory rounded-[9px] text-[13px] font-semibold hover:bg-ink-soft transition-colors"
+          aria-label="Share store"
+        >
+          <Share2 size={13} />
+          {canShare ? 'Share' : 'Copy & share'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function OverviewPage() {
   const { user, currentBusiness } = useAuth()
   const navigate = useNavigate()
-  const [analytics, setAnalytics]   = useState<AnalyticsSummary | null>(null)
-  const [recentOrders, setOrders]   = useState<Order[]>([])
-  const [lowStock, setLowStock]     = useState<InventoryItem[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [period, setPeriod]         = useState<'7d'|'30d'>('7d')
+  const [analytics, setAnalytics]       = useState<AnalyticsSummary | null>(null)
+  const [recentOrders, setOrders]       = useState<Order[]>([])
+  const [lowStock, setLowStock]         = useState<InventoryItem[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [period, setPeriod]             = useState<'7d'|'30d'>('7d')
+  const [sfSettings, setSfSettings]     = useState<StorefrontSettings | null>(null)
 
-  const hour     = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const hour      = new Date().getHours()
+  const greeting  = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const firstName = user?.name?.split(' ')[0] ?? 'there'
 
+  // Load analytics, orders, inventory in parallel
   useEffect(() => {
     if (!currentBusiness) return
     setLoading(true)
     Promise.all([
       analyticsService.getAll(currentBusiness.id, period),
       orderService.getAll(currentBusiness.id, { page_size: 5 }),
-      inventoryService.getAll(currentBusiness.id, true),  // low stock only
+      inventoryService.getAll(currentBusiness.id, true),
     ]).then(([a, { orders }, { items }]) => {
       setAnalytics(a)
       setOrders(orders)
@@ -45,6 +150,14 @@ export default function OverviewPage() {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [currentBusiness?.id, period]) // eslint-disable-line
+
+  // Load storefront publish state (needed for the live card)
+  useEffect(() => {
+    if (!currentBusiness) return
+    businessService.getStorefrontSettings(currentBusiness.id)
+      .then(setSfSettings)
+      .catch(() => { /* non-critical — card simply stays hidden */ })
+  }, [currentBusiness?.id])
 
   const weeklyBars = (analytics?.revenueData ?? []).slice(-7).map((d, i, arr) => ({
     label: i === arr.length - 1 ? 'Today' : new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
@@ -187,7 +300,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Bottom row */}
-      <div className="grid lg:grid-cols-3 gap-5">
+      <div className={['grid gap-5', sfSettings?.isPublished ? 'lg:grid-cols-3' : 'lg:grid-cols-3'].join(' ')}>
         {/* Top products */}
         <div className="lg:col-span-2 bg-white border border-sand rounded-[14px] p-5">
           <div className="flex items-center justify-between mb-4">
@@ -233,9 +346,19 @@ export default function OverviewPage() {
           )}
         </div>
 
-        {/* Needs attention */}
-        <div className="bg-white border border-sand rounded-[14px] p-5">
-          <h3 className="font-serif text-[17px] font-medium text-ink mb-4">Needs attention</h3>
+        {/* Right column: storefront card (published only) + needs attention */}
+        <div className="space-y-5">
+          {/* Storefront live card — only shown when storefront is published */}
+          {sfSettings?.isPublished && currentBusiness && (
+            <StorefrontLiveCard
+              slug={currentBusiness.slug}
+              name={currentBusiness.name}
+            />
+          )}
+
+          {/* Needs attention */}
+          <div className="bg-white border border-sand rounded-[14px] p-5">
+            <h3 className="font-serif text-[17px] font-medium text-ink mb-4">Needs attention</h3>
           {loading ? <Skeleton height={160} /> : lowStock.length === 0 && recentOrders.filter(o => o.status === 'new').length === 0 ? (
             <div className="text-center py-8">
               <div className="w-10 h-10 rounded-full bg-green-light flex items-center justify-center mx-auto mb-3">
@@ -272,8 +395,9 @@ export default function OverviewPage() {
               ))}
             </div>
           )}
-        </div>
-      </div>
+          </div>{/* end needs-attention card */}
+        </div>{/* end right column */}
+      </div>{/* end bottom row */}
 
       {/* Business insights */}
       {analytics && !loading && (

@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { X, Upload, Loader2 } from 'lucide-react'
-import { Button, Input, Textarea, Select, Toggle, PageHeader, useToast, Skeleton } from '@/components/ui'
+import { X } from 'lucide-react'
+import { Button, Input, Textarea, Select, Toggle, PageHeader, useToast, Skeleton, ProductImageUploader } from '@/components/ui'
 import { productService, categoryService } from '@/services/productService'
-import { uploadService } from '@/services/uploadService'
 import { useAuth } from '@/context/AuthContext'
 import type { Product, Category } from '@/types'
 
@@ -45,29 +44,9 @@ export default function ProductDetailPage() {
 
   const [loading, setLoading]       = useState(!isNew)
   const [saving, setSaving]         = useState(false)
-  const [uploading, setUploading]   = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [form, setForm]             = useState<FormState>(blankForm)
   const [tagInput, setTagInput]     = useState('')
-  const fileInputRef                = useRef<HTMLInputElement>(null)
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const err = uploadService.validate(file)
-    if (err) { toast('error', 'Invalid file', err); return }
-    setUploading(true)
-    try {
-      const url = await uploadService.uploadImage(file, 'products')
-      set('images', [...form.images, url])
-      toast('success', 'Image uploaded')
-    } catch (uploadErr: unknown) {
-      toast('error', 'Upload failed', uploadErr instanceof Error ? uploadErr.message : '')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
 
   useEffect(() => {
     if (!currentBusiness) return
@@ -248,35 +227,12 @@ export default function ProductDetailPage() {
           {/* Images */}
           <div className="bg-white border border-sand rounded-[14px] p-5 space-y-3">
             <h3 className="font-serif text-[16px] font-medium text-ink">Product images</h3>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              {form.images.map((img, i) => (
-                <div key={i} className="relative aspect-square rounded-[10px] overflow-hidden border border-sand group">
-                  <img src={img} alt="" className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => set('images', form.images.filter((_, j) => j !== i))}
-                    className="absolute top-1 right-1 w-5 h-5 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={11} className="text-red" />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="aspect-square rounded-[10px] border-2 border-dashed border-sand flex flex-col items-center justify-center gap-1 hover:border-ink/30 transition-colors text-slate disabled:opacity-50"
-              >
-                {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                <span className="text-[11px]">{uploading ? 'Uploading…' : 'Add image'}</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-            </div>
-            <p className="text-[12px] text-slate">Accepted: JPEG, PNG, WebP, GIF. Max 10MB per image.</p>
+            <ProductImageUploader
+              images={form.images}
+              onChange={urls => set('images', urls)}
+              folder="products"
+              disabled={saving}
+            />
           </div>
         </div>
 

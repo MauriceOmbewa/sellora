@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Shield, TrendingUp } from 'lucide-react'
+import { Shield, ShoppingBag, Store } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 function GoogleIcon() {
@@ -18,11 +18,11 @@ export default function LoginPage() {
   const { initiateGoogleSignIn } = useAuth()
   const [loading, setLoading] = useState(false)
 
-  const handleGoogle = () => {
+  // Default return destination: landing page (customer-first)
+  const handleGoogle = (returnTo = '/') => {
     setLoading(true)
-    // Full browser redirect — no promise, navigates away from the page
-    initiateGoogleSignIn()
-    // Don't setLoading(false) — the page will navigate away
+    initiateGoogleSignIn(returnTo)
+    // Page navigates away — no setLoading(false) needed
   }
 
   return (
@@ -39,15 +39,14 @@ export default function LoginPage() {
 
         {/* Form center */}
         <div className="flex-1 flex flex-col justify-center max-w-[380px] mx-auto w-full">
-          <h1 className="font-serif text-[32px] text-ink mb-2">Welcome back</h1>
+          <h1 className="font-serif text-[32px] text-ink mb-2">Welcome to Sellora</h1>
           <p className="text-[15px] text-slate leading-relaxed mb-8">
-            Sign in to manage your shop, check today's sales,
-            and keep your storefront up to date.
+            Sign in to shop, track your orders, and save your favourites across all stores.
           </p>
 
-          {/* Google button */}
+          {/* Primary CTA — customer sign in (returns to landing) */}
           <button
-            onClick={handleGoogle}
+            onClick={() => handleGoogle('/')}
             disabled={loading}
             className={[
               'w-full flex items-center justify-center gap-3 bg-white border border-sand',
@@ -65,32 +64,50 @@ export default function LoginPage() {
             {loading ? 'Redirecting to Google…' : 'Continue with Google'}
           </button>
 
+          {/* Why Google */}
+          <div className="flex items-start gap-3 mt-5 p-4 bg-white border border-sand rounded-[12px]">
+            <Shield size={15} className="text-green mt-0.5 shrink-0" />
+            <p className="text-[13px] text-slate leading-relaxed">
+              One less password to forget. Your account stays tied to the Google inbox you already use every day.
+            </p>
+          </div>
+
           {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
+          <div className="flex items-center gap-3 my-7">
             <div className="flex-1 h-px bg-sand" />
-            <span className="text-[12px] text-slate">that's the only way in</span>
+            <span className="text-[12px] text-slate">want to sell on Sellora?</span>
             <div className="flex-1 h-px bg-sand" />
           </div>
 
-          {/* Why Google */}
-          <div className="bg-white border border-sand rounded-[12px] p-4">
-            <div className="flex items-start gap-3">
-              <Shield size={16} className="text-green mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[13.5px] font-semibold text-ink mb-1">Why only Google?</p>
-                <p className="text-[13px] text-slate leading-relaxed">
-                  One less password to lose. Your account stays tied to an inbox you already check every day.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Vendor CTA — sign in and go straight to business dashboard */}
+          <button
+            onClick={() => handleGoogle('/businesses')}
+            disabled={loading}
+            className={[
+              'w-full flex items-center justify-center gap-2.5 border border-sand',
+              'rounded-[10px] px-5 py-3.5 text-[14px] font-semibold text-ink-soft',
+              'hover:border-ink hover:text-ink hover:shadow-sm transition-all duration-150',
+              'focus-visible:outline-2 focus-visible:outline-gold',
+              'disabled:opacity-60 disabled:cursor-not-allowed',
+            ].join(' ')}
+          >
+            <Store size={15} />
+            Sign in as a vendor
+          </button>
+          <p className="text-center text-[12.5px] text-slate mt-2">
+            Takes you to your business dashboard
+          </p>
         </div>
 
         {/* Footer */}
-        <div className="text-center text-[13px] text-slate mt-10">
-          Don't have a shop yet?{' '}
-          <Link to="/" className="text-ink font-semibold hover:underline">
-            Learn more →
+        <div className="flex items-center justify-center gap-4 text-[13px] text-slate mt-10">
+          <Link to="/marketplace" className="flex items-center gap-1.5 hover:text-ink transition-colors">
+            <ShoppingBag size={13} />
+            Browse the marketplace
+          </Link>
+          <span className="text-sand">·</span>
+          <Link to="/" className="hover:text-ink transition-colors">
+            Back to home
           </Link>
         </div>
       </div>
@@ -103,60 +120,46 @@ export default function LoginPage() {
           style={{ background: 'radial-gradient(circle, rgba(199,154,61,0.2), transparent 70%)' }}
         />
 
-        {/* Testimonial */}
-        <div className="relative z-10 max-w-[420px]">
-          <p className="text-[12px] font-semibold text-gold uppercase tracking-widest mb-6">
-            Maison Aura · Nairobi
+        {/* Two roles callout */}
+        <div className="relative z-10 space-y-5">
+          <p className="text-[12px] font-semibold text-gold uppercase tracking-widest mb-2">
+            One account, two ways to use Sellora
           </p>
-          <blockquote className="font-serif text-[28px] text-ivory leading-[1.35] font-light italic">
-            "I used to close the shop just to reconcile my payments. Now I see everything update live from my phone."
-          </blockquote>
-          <div className="mt-6">
-            <p className="text-[14px] font-semibold text-ivory">Faith Wanjiru</p>
-            <p className="text-[13px] text-ivory/50">Owner, Maison Aura</p>
+
+          <div className="bg-white/5 border border-white/10 rounded-[14px] p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-[8px] bg-gold/20 flex items-center justify-center">
+                <ShoppingBag size={15} className="text-gold" />
+              </div>
+              <p className="text-[14px] font-semibold text-ivory">Shop as a customer</p>
+            </div>
+            <p className="text-[13px] text-ivory/60 leading-relaxed">
+              Browse all stores on Sellora, track your orders, and save items you love — all in one place.
+            </p>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-[14px] p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-[8px] bg-green/20 flex items-center justify-center">
+                <Store size={15} className="text-green" />
+              </div>
+              <p className="text-[14px] font-semibold text-ivory">Sell as a vendor</p>
+            </div>
+            <p className="text-[13px] text-ivory/60 leading-relaxed">
+              Launch your own branded storefront, manage products, and track every order from a powerful dashboard.
+            </p>
           </div>
         </div>
 
-        {/* Mini dashboard preview */}
-        <div className="relative z-10 bg-white/5 border border-white/10 rounded-[14px] p-5 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-[6px] bg-gold flex items-center justify-center font-serif font-bold text-ink text-[12px]">
-                M
-              </div>
-              <span className="text-[13px] font-semibold text-ivory">Maison Aura</span>
-            </div>
-            <span className="text-[11px] text-ivory/50">Today</span>
+        {/* Testimonial */}
+        <div className="relative z-10 max-w-[420px]">
+          <blockquote className="font-serif text-[22px] text-ivory leading-[1.4] font-light italic mb-5">
+            "I used to close the shop just to reconcile my payments. Now I see everything update live from my phone."
+          </blockquote>
+          <div>
+            <p className="text-[14px] font-semibold text-ivory">Faith Wanjiru</p>
+            <p className="text-[13px] text-ivory/50">Owner, Maison Aura · Nairobi</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: 'Revenue', value: 'KSh 84.2K', icon: <TrendingUp size={13} className="text-gold" /> },
-              { label: 'Orders', value: '37', icon: null },
-              { label: 'Low stock', value: '3', icon: null },
-            ].map(kpi => (
-              <div key={kpi.label} className="bg-white/[0.08] rounded-[9px] p-3">
-                <p className="text-[10px] text-ivory/50 mb-1.5">{kpi.label}</p>
-                <div className="flex items-center gap-1.5">
-                  <p className="font-serif text-[17px] font-semibold text-ivory">{kpi.value}</p>
-                  {kpi.icon}
-                </div>
-              </div>
-            ))}
-          </div>
-          {/* Sparkline bars */}
-          <div className="mt-4 flex items-end gap-1 h-12">
-            {[35, 50, 40, 65, 55, 80, 96].map((h, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-t-[2px]"
-                style={{
-                  height: `${(h / 100) * 48}px`,
-                  background: h >= 80 ? '#C79A3D' : 'rgba(255,255,255,0.2)',
-                }}
-              />
-            ))}
-          </div>
-          <p className="text-[10px] text-ivory/40 mt-2">Sales this week</p>
         </div>
       </div>
     </div>

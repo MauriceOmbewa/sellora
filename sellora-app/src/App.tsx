@@ -8,6 +8,10 @@ import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 // ── Lazy pages — Marketing ────────────────────────────────────────────────────
 const LandingPage        = lazy(() => import('@/pages/marketing/LandingPage'))
 
+// Marketplace (public — customer-facing cross-vendor discovery)
+const MarketplacePage        = lazy(() => import('@/pages/marketplace/MarketplacePage'))
+const MarketplaceProductPage = lazy(() => import('@/pages/marketplace/MarketplaceProductPage'))
+
 // Auth
 const LoginPage          = lazy(() => import('@/pages/auth/LoginPage'))
 const AuthCallbackPage   = lazy(() => import('@/pages/auth/AuthCallbackPage'))
@@ -110,9 +114,11 @@ function PageLoader() {
 // ── Auth guards ───────────────────────────────────────────────────────────────
 
 function AuthenticatedRedirect({ children }: { children: React.ReactNode }) {
-  const { authState } = useAuth()
-  if (authState === 'authenticated') return <Navigate to="/businesses" replace />
-  if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
+  const { authState, businesses } = useAuth()
+  // Already authenticated — send them somewhere useful
+  if (authState === 'authenticated') {
+    return <Navigate to={businesses.length > 0 ? '/businesses' : '/'} replace />
+  }
   return <>{children}</>
 }
 
@@ -120,7 +126,6 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { authState } = useAuth()
   if (authState === 'loading') return <PageLoader />
   if (authState === 'unauthenticated') return <Navigate to="/login" replace />
-  if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
 
@@ -128,7 +133,6 @@ function RequireBusiness({ children }: { children: React.ReactNode }) {
   const { authState, currentBusiness } = useAuth()
   if (authState === 'loading') return <PageLoader />
   if (authState === 'unauthenticated') return <Navigate to="/login" replace />
-  if (authState === 'needs-onboarding') return <Navigate to="/onboarding" replace />
   if (!currentBusiness) return <Navigate to="/businesses" replace />
   return <>{children}</>
 }
@@ -167,9 +171,11 @@ function AdminRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* Marketing */}
+        {/* Marketing + public marketplace — all under MarketingLayout nav */}
         <Route element={<MarketingLayout />}>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/marketplace" element={<MarketplacePage />} />
+          <Route path="/marketplace/product/:id" element={<MarketplaceProductPage />} />
         </Route>
 
         {/* Auth */}

@@ -12,12 +12,19 @@ interface AuthContextType {
   authState: AuthState
   businesses: Business[]
   currentBusiness: Business | null
-  initiateGoogleSignIn: () => void
+  /**
+   * Kick off Google OAuth. Pass `returnTo` to redirect back there after login
+   * instead of the default destination (e.g. pass '/' to return to landing page).
+   */
+  initiateGoogleSignIn: (returnTo?: string) => void
   signOut: () => Promise<void>
   setCurrentBusiness: (business: Business) => void
   refreshBusinesses: () => Promise<void>
   handleAuthCallback: (access: string, refresh: string) => Promise<void>
 }
+
+/** localStorage key used to store the post-login redirect path */
+export const AFTER_LOGIN_KEY = 'sellora_after_login'
 
 // ── Provider props ────────────────────────────────────────────────────────────
 
@@ -77,16 +84,14 @@ export function AuthProvider({ children, isStorefront = false }: AuthProviderPro
       const list = await businessService.getAll()
       setBusinesses(list)
 
-      if (list.length === 0) {
-        setAuthState('needs-onboarding')
-        return
-      }
-
       if (selectId) {
         const found = list.find(b => b.id === selectId)
         if (found) setCurrentBusinessState(found)
       }
 
+      // Always settle as authenticated — even with zero businesses.
+      // A user with no businesses is a customer; they opt in to becoming
+      // a vendor by clicking "Create your store" (not forced via redirect).
       setAuthState('authenticated')
     } catch {
       // Still authenticated, just no businesses loaded — show empty state
@@ -168,7 +173,13 @@ export function AuthProvider({ children, isStorefront = false }: AuthProviderPro
 
   // ── Initiate Google sign-in ───────────────────────────────────────────────
 
-  const initiateGoogleSignIn = useCallback(() => {
+  const initiateGoogleSignIn = useCallback((returnTo?: string) => {
+    // Store where to go after the OAuth callback completes
+    if (returnTo) {
+      localStorage.setItem(AFTER_LOGIN_KEY, returnTo)
+    } else {
+      localStorage.removeItem(AFTER_LOGIN_KEY)
+    }
     window.location.href = `${API_BASE}/api/v1/auth/google/?next=web`
   }, [])
 

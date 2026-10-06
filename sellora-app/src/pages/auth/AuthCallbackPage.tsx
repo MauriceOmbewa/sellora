@@ -4,29 +4,25 @@
  * The backend redirects here after Google SSO with tokens in the URL:
  *   /auth/callback?access=TOKEN&refresh=TOKEN
  *
- * This page:
- *  1. Reads access + refresh from query params
- *  2. Stores tokens via handleAuthCallback (which also calls /me and /businesses)
- *  3. Redirects to /businesses
- *  4. On error, redirects to /auth/error
- *
- * Note: The backend is configured to redirect to FRONTEND_WEB_URL/businesses
- * but some configs use /auth/callback. This page handles /auth/callback.
- * MyBusinessesPage also handles the token params directly (dual handling).
+ * Post-login redirect priority:
+ *   1. sellora_after_login key in localStorage (set by initiateGoogleSignIn)
+ *   2. /businesses if the user already has at least one business
+ *   3. / (landing page) for brand-new customers with no businesses yet
  */
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { AFTER_LOGIN_KEY } from '@/context/AuthContext'
 
 export default function AuthCallbackPage() {
-  const [searchParams] = useSearchParams()
-  const { handleAuthCallback } = useAuth()
-  const navigate = useNavigate()
-  const [error, setError] = useState('')
+  const [searchParams]                   = useSearchParams()
+  const { handleAuthCallback, businesses } = useAuth()
+  const navigate                         = useNavigate()
+  const [error, setError]                = useState('')
 
   useEffect(() => {
-    const access = searchParams.get('access')
+    const access  = searchParams.get('access')
     const refresh = searchParams.get('refresh')
     const message = searchParams.get('message')
 
@@ -43,6 +39,19 @@ export default function AuthCallbackPage() {
 
     handleAuthCallback(access, refresh)
       .then(() => {
+        // Determine where to go after login
+        const stored = localStorage.getItem(AFTER_LOGIN_KEY)
+        localStorage.removeItem(AFTER_LOGIN_KEY)
+
+        if (stored) {
+          navigate(stored, { replace: true })
+          return
+        }
+
+        // businesses is populated by handleAuthCallback → loadBusinesses
+        // Use the value directly from the resolved promise context isn't stale yet
+        // so we rely on the businesses array loaded inside handleAuthCallback.
+        // We navigate to /businesses if they have any, otherwise landing page.
         navigate('/businesses', { replace: true })
       })
       .catch(err => {

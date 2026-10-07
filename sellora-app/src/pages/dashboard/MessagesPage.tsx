@@ -1429,18 +1429,61 @@ function LiveChatPanel() {
               <Badge variant="outline">Live Chat</Badge>
             </div>
 
-            {/* Customer contact details */}
-            {(selected.customerEmail || selected.customerPhone) && (
-              <div className="px-5 py-2 border-b border-sand bg-ivory/40 flex flex-wrap gap-4 text-[11.5px] text-slate">
-                {selected.customerEmail && <span>✉️ {selected.customerEmail}</span>}
-                {selected.customerPhone && (
-                  <span className="flex items-center gap-1">
-                    <Phone size={11} className="shrink-0" />
-                    {selected.customerPhone}
-                  </span>
-                )}
-              </div>
-            )}
+            {/* Customer details + anonymous warning */}
+            {(() => {
+              const isAnon = !selected.customerEmail
+              return (
+                <>
+                  {/* Contact details strip — always shown */}
+                  <div className="px-5 py-2.5 border-b border-sand bg-ivory/40 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[12px] text-slate">
+                    {selected.customerPhone ? (
+                      <a
+                        href={`https://wa.me/${selected.customerPhone.replace(/\D/g, '')}?text=Hi ${selected.customerName}, thanks for reaching out!`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 font-semibold text-green hover:underline"
+                      >
+                        <Phone size={12} className="shrink-0" />
+                        {selected.customerPhone}
+                        <span className="text-[10px] font-normal text-slate">(WhatsApp)</span>
+                      </a>
+                    ) : (
+                      <span className="italic text-slate/60">No phone provided</span>
+                    )}
+                    {selected.customerEmail && (
+                      <span className="flex items-center gap-1">✉️ {selected.customerEmail}</span>
+                    )}
+                    <span className={[
+                      'ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold',
+                      isAnon
+                        ? 'bg-gold-light text-gold-deep border border-gold/20'
+                        : 'bg-green-light text-green border border-green/20',
+                    ].join(' ')}>
+                      {isAnon ? '👤 Anonymous visitor' : '✓ Logged-in customer'}
+                    </span>
+                  </div>
+
+                  {/* Anonymous warning banner */}
+                  {isAnon && (
+                    <div className="px-5 py-2.5 bg-gold-light/60 border-b border-gold/20 flex items-start gap-2.5 shrink-0">
+                      <span className="text-[14px] shrink-0">⚠️</span>
+                      <p className="text-[12.5px] text-ink-soft leading-snug">
+                        <strong>Anonymous chat.</strong> This visitor is not logged in — their chat is saved only in their browser.
+                        If they close the tab or clear storage, your replies won't reach them.
+                        {selected.customerPhone && (
+                          <> Follow up via WhatsApp at <strong>{selected.customerPhone}</strong> to ensure they receive your response.</>
+                        )}
+                        {!selected.customerPhone && (
+                          <> Ask them to share their phone number or{' '}
+                          <a href="/login" className="text-gold-deep font-semibold hover:underline">sign in</a>
+                          {' '}for persistent chat history.</>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">

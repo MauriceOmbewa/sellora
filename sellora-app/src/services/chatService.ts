@@ -109,3 +109,41 @@ export async function getBusinessChatConversation(
   )
   return res.data
 }
+
+/**
+ * POST /api/v1/businesses/{id}/chat/conversations/{convId}/read/
+ * Marks all unread visitor messages in the conversation as read.
+ */
+export async function markConversationRead(
+  businessId: string,
+  conversationId: string,
+): Promise<void> {
+  await api.post<ApiResponse<{ marked_read: number }>>(
+    `/api/v1/businesses/${businessId}/chat/conversations/${conversationId}/read/`,
+  )
+}
+
+/**
+ * Build the WebSocket URL for the business-wide notification socket.
+ * This socket connects to a per-business group so the admin receives
+ * new_conversation_message events even when not viewing a conversation.
+ *
+ * We reuse the conversation socket endpoint but authenticate as business;
+ * the consumer will join both the conversation group AND the business group.
+ * For the notification socket we pass a sentinel conversation ID that the
+ * backend resolves to the business-wide group only.
+ *
+ * IMPLEMENTATION NOTE:
+ * The simplest approach with the current consumer is to open a WebSocket
+ * to any open conversation (just to authenticate and join the business group).
+ * The consumer adds the business to business_{id} group on auth regardless of
+ * which conversation the socket was opened for.
+ *
+ * This function is not an API call — it just builds the URL.
+ */
+export function buildBusinessWsUrl(conversationId: string): string {
+  const base   = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+  const parsed = new URL(base)
+  const proto  = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${parsed.host}/ws/chat/${conversationId}/`
+}

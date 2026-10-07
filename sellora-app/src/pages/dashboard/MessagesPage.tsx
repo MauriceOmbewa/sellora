@@ -27,6 +27,7 @@ import {
 import {
   getBusinessChatConversations,
   getBusinessChatConversation,
+  markConversationRead,
 } from '@/services/chatService'
 
 import { useAuth } from '@/context/AuthContext'
@@ -1030,63 +1031,28 @@ type LiveChatConversation = {
   messages: LiveChatMessage[]
 }
 
-function LiveChatBubble({
-  message,
-}: {
-  message: LiveChatMessage
-}) {
-  const isBusiness =
-    message.sender === 'business'
-
-  const time = new Date(
-    message.timestamp,
-  ).toLocaleTimeString('en-KE', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+function LiveChatBubble({ message }: { message: LiveChatMessage }) {
+  const isBusiness = message.sender === 'business'
+  const time = new Date(message.timestamp).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div
-      className={`flex ${
+    <div className={`flex ${isBusiness ? 'justify-end' : 'justify-start'}`}>
+      <div className={[
+        'max-w-[72%] px-3.5 py-2.5 rounded-[14px] text-[13.5px] leading-snug',
         isBusiness
-          ? 'justify-end'
-          : 'justify-start'
-      }`}
-    >
-      <div
-        className={[
-          'max-w-[72%] px-3.5 py-2.5 rounded-[14px] text-[13.5px] leading-snug',
-          isBusiness
-            ? 'bg-blue text-white rounded-br-[4px]'
-            : 'bg-ivory text-ink border border-sand rounded-bl-[4px]',
-        ].join(' ')}
-      >
-        <p className="whitespace-pre-wrap break-words">
-          {message.body}
-        </p>
-
-        <div
-          className={[
-            'flex items-center justify-end gap-1 mt-1',
-            isBusiness
-              ? 'text-white/60'
-              : 'text-slate',
-          ].join(' ')}
-        >
-          <span className="text-[11px]">
-            {time}
-          </span>
-
-          {isBusiness &&
-            message.status && (
-              <>
-                {message.status === 'read' ? (
-                  <CheckCheck size={13} />
-                ) : (
-                  <Check size={13} />
-                )}
-              </>
-            )}
+          ? 'bg-blue text-white rounded-br-[4px]'
+          : 'bg-ivory text-ink border border-sand rounded-bl-[4px]',
+      ].join(' ')}>
+        <p className="whitespace-pre-wrap break-words">{message.body}</p>
+        <div className={['flex items-center justify-end gap-1 mt-1', isBusiness ? 'text-white/60' : 'text-slate'].join(' ')}>
+          <span className="text-[11px]">{time}</span>
+          {isBusiness && message.status && (
+            // Grey ticks = sent, blue ticks = read (visitor has seen the message)
+            <CheckCheck
+              size={13}
+              className={message.status === 'read' ? 'text-blue-200' : 'text-white/40'}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1097,468 +1063,293 @@ function LiveChatPanel() {
   const { currentBusiness } = useAuth()
   const { toast } = useToast()
 
-  const [conversations, setConversations] =
-    useState<LiveChatConversation[]>([])
+  const [conversations, setConversations]         = useState<LiveChatConversation[]>([])
+  const [selectedId, setSelectedId]               = useState<string | null>(null)
+  const [loading, setLoading]                     = useState(true)
+  const [conversationLoading, setConversationLoading] = useState(false)
+  const [replyText, setReplyText]                 = useState('')
+  const [sending, setSending]                     = useState(false)
+  const [socketStatus, setSocketStatus]           = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
 
-  const [selectedId, setSelectedId] =
-    useState<string | null>(null)
+  const bottomRef   = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const socketRef   = useRef<WebSocket | null>(null)
+  // Notification socket — stays open while the panel is mounted, connected to
+  // the business-wide group so new visitor messages arrive in real time
+  const notifSocketRef = useRef<WebSocket | null>(null)
 
-  const [loading, setLoading] =
-    useState(true)
+  const selected = conversations.find(c => c.id === selectedId) ?? null
+  const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
 
-  const [conversationLoading, setConversationLoading] =
-    useState(false)
+  // ── Mappers ────────────────────────────────────────────────────────────────
 
-  const [replyText, setReplyText] =
-    useState('')
-
-  const [sending, setSending] =
-    useState(false)
-
-  const [socketStatus, setSocketStatus] =
-    useState<
-      'connecting' | 'connected' | 'disconnected'
-    >('disconnected')
-
-  const bottomRef =
-    useRef<HTMLDivElement>(null)
-
-  const textareaRef =
-    useRef<HTMLTextAreaElement>(null)
-
-  const socketRef =
-    useRef<WebSocket | null>(null)
-
-  const selected =
-    conversations.find(
-      conversation =>
-        conversation.id === selectedId,
-    ) ?? null
-
-  const unreadCount = conversations.reduce(
-    (total, conversation) =>
-      total + conversation.unreadCount,
-    0,
-  )
-
-  const mapConversation = (
-    conversation: Awaited<
-      ReturnType<typeof getBusinessChatConversation>
-    >,
+  const mapConversationFull = (
+    conversation: Awaited<ReturnType<typeof getBusinessChatConversation>>,
   ): LiveChatConversation => {
-    const visitor = conversation.visitor
-
-    const messages =
-      conversation.messages ?? []
-
-    const lastMessage =
-      messages[messages.length - 1]
+    const visitor  = conversation.visitor
+    const messages = conversation.messages ?? []
+    const last     = messages[messages.length - 1]
 
     return {
-      id: conversation.id,
-      customerName:
-        visitor.name || 'Guest Visitor',
-      customerEmail:
-        visitor.email || undefined,
-      lastMessage:
-        lastMessage?.content ?? 'No messages yet',
-      lastMessageAt:
-        lastMessage?.created_at ??
-        conversation.last_message_at ??
-        conversation.created_at,
-      unreadCount: messages.filter(
-        message =>
-          message.sender_type === 'visitor' &&
-          !message.is_read,
-      ).length,
-      messages: messages.map(message => ({
-        id: message.id,
-        body: message.content,
-        sender:
-          message.sender_type === 'business'
-            ? 'business'
-            : 'customer',
-        timestamp: message.created_at,
-        status:
-          message.sender_type === 'business'
-            ? message.is_read
-              ? 'read'
-              : 'sent'
-            : undefined,
+      id:             conversation.id,
+      customerName:   visitor.name  || 'Guest Visitor',
+      customerEmail:  visitor.email || undefined,
+      customerPhone:  visitor.phone || undefined,          // ← now mapped
+      lastMessage:    last?.content ?? 'No messages yet',
+      lastMessageAt:  last?.created_at ?? conversation.last_message_at ?? conversation.created_at,
+      unreadCount:    messages.filter(m => m.sender_type === 'visitor' && !m.is_read).length,
+      messages:       messages.map(m => ({
+        id:        m.id,
+        body:      m.content,
+        sender:    m.sender_type === 'business' ? 'business' : 'customer',
+        timestamp: m.created_at,
+        status:    m.sender_type === 'business' ? (m.is_read ? 'read' : 'sent') : undefined,
       })),
     }
   }
 
+  // ── Load conversation list ─────────────────────────────────────────────────
+
   const loadConversations = async () => {
     if (!currentBusiness) return
-
     setLoading(true)
-
     try {
-      const data =
-        await getBusinessChatConversations(
-          currentBusiness.id,
-        )
-
-      const mapped =
-        data.map(conversation => ({
-          id: conversation.id,
-          customerName:
-            conversation.visitor.name ||
-            'Guest Visitor',
-          customerEmail:
-            conversation.visitor.email ||
-            undefined,
-          lastMessage:
-            'No messages yet',
-          lastMessageAt:
-            conversation.last_message_at ??
-            conversation.created_at,
-          unreadCount: 0,
-          messages: [],
-        }))
-
+      const data = await getBusinessChatConversations(currentBusiness.id)
+      const mapped = data.map(c => ({
+        id:            c.id,
+        customerName:  c.visitor.name  || 'Guest Visitor',
+        customerEmail: c.visitor.email || undefined,
+        customerPhone: c.visitor.phone || undefined,
+        lastMessage:   'No messages yet',
+        lastMessageAt: c.last_message_at ?? c.created_at,
+        // unread_count comes from the API now (no longer always 0)
+        unreadCount:   (c as any).unread_count ?? 0,
+        messages:      [],
+      }))
       setConversations(mapped)
-
-      if (
-        mapped.length > 0 &&
-        !selectedId
-      ) {
-        setSelectedId(mapped[0].id)
-      }
-    } catch (error) {
-      console.error(
-        'Failed to load live chat conversations:',
-        error,
-      )
-
-      toast(
-        'error',
-        'Failed to load live chat conversations',
-      )
+      if (mapped.length > 0 && !selectedId) setSelectedId(mapped[0].id)
+    } catch {
+      toast('error', 'Failed to load live chat conversations')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadConversations()
-  }, [currentBusiness?.id]) // eslint-disable-line
+  useEffect(() => { loadConversations() }, [currentBusiness?.id]) // eslint-disable-line
 
-  const closeSocket = () => {
-    if (socketRef.current) {
-      socketRef.current.close()
-      socketRef.current = null
+  // ── Notification WebSocket (business-wide) ─────────────────────────────────
+  // Opens a socket to any existing open conversation solely to join the
+  // business_{id} channel group. Receives new_conversation_message events
+  // for all conversations, not just the one currently open.
+
+  const openNotifSocket = (conversationId: string) => {
+    if (notifSocketRef.current) notifSocketRef.current.close()
+    const accessToken = tokenStorage.getAccess()
+    if (!accessToken) return
+
+    const base    = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+    const wsBase  = base.startsWith('https://') ? base.replace('https://', 'wss://') : base.replace('http://', 'ws://')
+    const ws      = new WebSocket(`${wsBase}/ws/chat/${conversationId}/`)
+    notifSocketRef.current = ws
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'auth', role: 'business', access_token: accessToken }))
     }
 
+    ws.onmessage = evt => {
+      try {
+        const data = JSON.parse(evt.data)
+        if (data.type !== 'new_conversation_message') return
+
+        const convId: string  = data.conversation_id
+        const msg             = data.message
+
+        setConversations(prev => {
+          const exists = prev.find(c => c.id === convId)
+          if (exists) {
+            // Update existing conversation's last message + unread count
+            return prev.map(c => c.id !== convId ? c : {
+              ...c,
+              lastMessage:    msg.content,
+              lastMessageAt:  msg.created_at,
+              // Only increment if this conversation isn't currently open
+              unreadCount:    c.id === selectedId
+                ? c.unreadCount          // currently open — don't double-count
+                : c.unreadCount + 1,
+            })
+          }
+          // New conversation — add it to the top of the list
+          return [{
+            id:            convId,
+            customerName:  'New visitor',
+            lastMessage:   msg.content,
+            lastMessageAt: msg.created_at,
+            unreadCount:   1,
+            messages:      [],
+          }, ...prev]
+        })
+      } catch { /* ignore */ }
+    }
+
+    ws.onclose = ws.onerror = () => { /* silent — not the main socket */ }
+  }
+
+  // Open the notif socket as soon as we have at least one conversation
+  useEffect(() => {
+    if (!loading && conversations.length > 0 && !notifSocketRef.current) {
+      openNotifSocket(conversations[0].id)
+    }
+  }, [loading, conversations.length]) // eslint-disable-line
+
+  useEffect(() => () => { notifSocketRef.current?.close() }, [])
+
+  // ── Conversation WebSocket (per-conversation) ──────────────────────────────
+
+  const closeSocket = () => {
+    socketRef.current?.close()
+    socketRef.current = null
     setSocketStatus('disconnected')
   }
 
-  const connectWebSocket = (
-    conversationId: string,
-  ) => {
+  const connectWebSocket = (conversationId: string) => {
     closeSocket()
+    const accessToken = tokenStorage.getAccess()
+    if (!accessToken) { toast('error', 'Authentication token not found'); return }
 
-    const accessToken =
-      tokenStorage.getAccess()
-
-    if (!accessToken) {
-      toast(
-        'error',
-        'Authentication token not found',
-      )
-      return
-    }
-
-    const apiBaseUrl =
-      import.meta.env.VITE_API_BASE_URL ??
-      'http://localhost:8000'
-
-    const wsBaseUrl =
-      apiBaseUrl.startsWith('https://')
-        ? apiBaseUrl.replace(
-            'https://',
-            'wss://',
-          )
-        : apiBaseUrl.replace(
-            'http://',
-            'ws://',
-          )
-
-    const socket = new WebSocket(
-      `${wsBaseUrl}/ws/chat/${conversationId}/`,
-    )
-
-    socketRef.current = socket
-
+    const base   = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+    const wsBase = base.startsWith('https://') ? base.replace('https://', 'wss://') : base.replace('http://', 'ws://')
+    const ws     = new WebSocket(`${wsBase}/ws/chat/${conversationId}/`)
+    socketRef.current = ws
     setSocketStatus('connecting')
 
-    socket.onopen = () => {
+    ws.onopen = () => {
       setSocketStatus('connected')
-
-      socket.send(
-        JSON.stringify({
-          type: 'auth',
-          role: 'business',
-          access_token: accessToken,
-        }),
-      )
+      ws.send(JSON.stringify({ type: 'auth', role: 'business', access_token: accessToken }))
     }
 
-    socket.onmessage = event => {
+    ws.onmessage = evt => {
       try {
-        const data = JSON.parse(event.data)
+        const data = JSON.parse(evt.data)
 
-        if (
-          data.type === 'auth.success'
-        ) {
+        if (data.type === 'auth.success') {
+          // Send read receipt immediately — we're now viewing this conversation
+          ws.send(JSON.stringify({ type: 'read' }))
           return
         }
 
-        if (
-          data.type !== 'chat.message' ||
-          !data.message
-        ) {
-          return
-        }
+        if (data.type === 'chat.message' && data.message) {
+          const incoming = data.message
+          const newMsg: LiveChatMessage = {
+            id:        incoming.id,
+            body:      incoming.content,
+            sender:    incoming.sender_type === 'business' ? 'business' : 'customer',
+            timestamp: incoming.created_at,
+            status:    incoming.sender_type === 'business' ? 'sent' : undefined,
+          }
 
-        const incoming =
-          data.message
-
-        setConversations(prev =>
-          prev.map(conversation => {
-            if (
-              conversation.id !==
-              conversationId
-            ) {
-              return conversation
-            }
-
-            const newMessage: LiveChatMessage = {
-              id: incoming.id,
-              body: incoming.content,
-              sender:
-                incoming.sender_type ===
-                'business'
-                  ? 'business'
-                  : 'customer',
-              timestamp:
-                incoming.created_at,
-              status:
-                incoming.sender_type ===
-                'business'
-                  ? 'sent'
-                  : undefined,
-            }
-
-            const existing =
-              conversation.messages.some(
-                message =>
-                  message.id ===
-                  newMessage.id,
-              )
-
-            if (existing) {
-              return conversation
-            }
-
+          setConversations(prev => prev.map(c => {
+            if (c.id !== conversationId) return c
+            if (c.messages.some(m => m.id === newMsg.id)) return c
             return {
-              ...conversation,
-              lastMessage:
-                newMessage.body,
-              lastMessageAt:
-                newMessage.timestamp,
-              messages: [
-                ...conversation.messages,
-                newMessage,
-              ],
-              unreadCount:
-                newMessage.sender ===
-                'customer'
-                  ? conversation.unreadCount +
-                    1
-                  : conversation.unreadCount,
+              ...c,
+              lastMessage:    newMsg.body,
+              lastMessageAt:  newMsg.timestamp,
+              messages:       [...c.messages, newMsg],
+              // Incoming visitor message while chat is open — still unread until
+              // we send a read event (happens automatically on new messages)
+              unreadCount: newMsg.sender === 'customer' ? c.unreadCount + 1 : c.unreadCount,
             }
-          }),
-        )
-      } catch (error) {
-        console.error(
-          'Failed to process chat message:',
-          error,
-        )
-      }
+          }))
+
+          // If visitor sent a message while we have the conversation open,
+          // send read receipt immediately
+          if (incoming.sender_type === 'visitor' && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'read' }))
+            setConversations(prev => prev.map(c =>
+              c.id === conversationId ? { ...c, unreadCount: 0 } : c
+            ))
+          }
+        }
+      } catch { /* ignore */ }
     }
 
-    socket.onerror = () => {
-      setSocketStatus('disconnected')
-    }
-
-    socket.onclose = () => {
-      setSocketStatus('disconnected')
-    }
+    ws.onerror = ws.onclose = () => setSocketStatus('disconnected')
   }
 
-  const openConversation = async (
-    conversation: LiveChatConversation,
-  ) => {
-    if (!currentBusiness) return
+  // ── Open a conversation ────────────────────────────────────────────────────
 
+  const openConversation = async (conversation: LiveChatConversation) => {
+    if (!currentBusiness) return
     setSelectedId(conversation.id)
     setConversationLoading(true)
 
     try {
-      const full =
-        await getBusinessChatConversation(
-          currentBusiness.id,
-          conversation.id,
-        )
+      const full   = await getBusinessChatConversation(currentBusiness.id, conversation.id)
+      const mapped = mapConversationFull(full)
+      setConversations(prev => prev.map(c => c.id === conversation.id ? mapped : c))
 
-      const mapped =
-        mapConversation(full)
-
-      setConversations(prev =>
-        prev.map(item =>
-          item.id === conversation.id
-            ? mapped
-            : item,
-        ),
-      )
+      // Mark as read on the backend + clear local badge
+      await markConversationRead(currentBusiness.id, conversation.id)
+      setConversations(prev => prev.map(c => c.id === conversation.id ? { ...c, unreadCount: 0 } : c))
 
       connectWebSocket(conversation.id)
-    } catch (error) {
-      console.error(
-        'Failed to load live chat conversation:',
-        error,
-      )
-
-      toast(
-        'error',
-        'Failed to load conversation',
-      )
+    } catch {
+      toast('error', 'Failed to load conversation')
     } finally {
       setConversationLoading(false)
     }
   }
 
-  useEffect(() => {
-    return () => {
-      closeSocket()
-    }
-  }, [])
+  useEffect(() => () => closeSocket(), [])
 
+  // Auto-scroll to newest message
   useEffect(() => {
-    if (!selected?.messages.length) {
-      return
-    }
+    if (!selected?.messages.length) return
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  }, [selectedId, selected?.messages.length])
 
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: 'smooth',
-      })
-    }, 50)
-  }, [
-    selectedId,
-    selected?.messages.length,
-  ])
+  // ── Send ───────────────────────────────────────────────────────────────────
 
   const sendMessage = () => {
-    if (
-      !selected ||
-      !replyText.trim() ||
-      sending
-    ) {
+    if (!selected || !replyText.trim() || sending) return
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+      toast('error', 'Chat connection is not active')
       return
     }
-
-    const socket =
-      socketRef.current
-
-    if (
-      !socket ||
-      socket.readyState !==
-        WebSocket.OPEN
-    ) {
-      toast(
-        'error',
-        'Chat connection is not active',
-      )
-      return
-    }
-
     setSending(true)
-
-    socket.send(
-      JSON.stringify({
-        type: 'message',
-        content: replyText.trim(),
-      }),
-    )
-
+    socketRef.current.send(JSON.stringify({ type: 'message', content: replyText.trim() }))
     setReplyText('')
     setSending(false)
-
     textareaRef.current?.focus()
   }
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent<HTMLTextAreaElement>,
-  ) => {
-    if (
-      e.key === 'Enter' &&
-      !e.shiftKey
-    ) {
-      e.preventDefault()
-      sendMessage()
-    }
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
-  if (!currentBusiness) {
-    return null
-  }
+  if (!currentBusiness) return null
 
   return (
     <div className="grid lg:grid-cols-5 gap-5">
-      {/* Conversation list */}
+      {/* ── Conversation list ──────────────────────────────────────────────── */}
       <div className="lg:col-span-2 bg-white border border-sand rounded-[14px] overflow-hidden flex flex-col">
         <div className="px-4 py-3 border-b border-sand flex items-center justify-between">
           <div>
-            <p className="text-[13px] font-semibold text-ink">
+            <p className="text-[13px] font-semibold text-ink flex items-center gap-2">
               Live Chat
+              {totalUnread > 0 && (
+                <span className="bg-blue text-white text-[11px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
             </p>
-
             <p className="text-[11.5px] text-slate mt-0.5">
-              {conversations.length}{' '}
-              conversation
-              {conversations.length !==
-              1
-                ? 's'
-                : ''}
+              {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
             </p>
           </div>
-
           <div className="flex items-center gap-2">
-            <span
-              className={[
-                'w-2 h-2 rounded-full',
-                socketStatus ===
-                'connected'
-                  ? 'bg-green'
-                  : socketStatus ===
-                      'connecting'
-                    ? 'bg-gold'
-                    : 'bg-sand-dark',
-              ].join(' ')}
-            />
-
-            <span className="text-[11px] text-slate">
-              {socketStatus ===
-              'connected'
-                ? 'Connected'
-                : socketStatus ===
-                    'connecting'
-                  ? 'Connecting'
-                  : 'Offline'}
-            </span>
+            <span className={['w-2 h-2 rounded-full', socketStatus === 'connected' ? 'bg-green' : socketStatus === 'connecting' ? 'bg-gold' : 'bg-sand-dark'].join(' ')} />
+            <span className="text-[11px] text-slate capitalize">{socketStatus}</span>
           </div>
         </div>
 
@@ -1566,203 +1357,86 @@ function LiveChatPanel() {
           {loading ? (
             <div className="p-5 space-y-4">
               {[1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="flex gap-3"
-                >
-                  <Skeleton
-                    width={40}
-                    height={40}
-                    rounded
-                  />
-
-                  <div className="flex-1 space-y-2">
-                    <Skeleton
-                      height={13}
-                      className="w-3/4"
-                    />
-
-                    <Skeleton
-                      height={11}
-                      className="w-1/2"
-                    />
-                  </div>
+                <div key={i} className="flex gap-3">
+                  <Skeleton width={40} height={40} rounded />
+                  <div className="flex-1 space-y-2"><Skeleton height={13} className="w-3/4" /><Skeleton height={11} className="w-1/2" /></div>
                 </div>
               ))}
             </div>
-          ) : conversations.length ===
-            0 ? (
-            <EmptyState
-              icon={
-                <MessageSquare
-                  size={22}
-                />
-              }
-              title="No live chats"
-              description="Messages from customers visiting your storefront will appear here."
-            />
+          ) : conversations.length === 0 ? (
+            <EmptyState icon={<MessageSquare size={22} />} title="No live chats" description="Messages from customers visiting your storefront will appear here." />
           ) : (
-            conversations.map(
-              conversation => (
-                <button
-                  key={conversation.id}
-                  onClick={() =>
-                    openConversation(
-                      conversation,
-                    )
-                  }
-                  className={[
-                    'w-full flex items-start gap-3 px-4 py-3.5 border-b border-sand last:border-0 text-left transition-colors',
-                    selectedId ===
-                    conversation.id
-                      ? 'bg-ivory'
-                      : 'hover:bg-ivory/50',
-                    conversation.unreadCount >
-                    0
-                      ? 'bg-blue-light/20'
-                      : '',
-                  ].join(' ')}
-                >
-                  <div className="w-10 h-10 rounded-full bg-blue-light flex items-center justify-center font-serif font-semibold text-blue shrink-0 text-[14px]">
-                    {(
-                      conversation.customerName ||
-                      'G'
-                    )[0].toUpperCase()}
+            conversations.map(conversation => (
+              <button
+                key={conversation.id}
+                onClick={() => openConversation(conversation)}
+                className={[
+                  'w-full flex items-start gap-3 px-4 py-3.5 border-b border-sand last:border-0 text-left transition-colors',
+                  selectedId === conversation.id ? 'bg-ivory' : 'hover:bg-ivory/50',
+                  conversation.unreadCount > 0 ? 'bg-blue-light/20' : '',
+                ].join(' ')}
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-light flex items-center justify-center font-serif font-semibold text-blue shrink-0 text-[14px]">
+                  {(conversation.customerName || 'G')[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className={['text-[13.5px] truncate', conversation.unreadCount > 0 ? 'font-bold text-ink' : 'font-medium text-ink'].join(' ')}>
+                      {conversation.customerName}
+                    </p>
+                    <span className="text-[11px] text-slate shrink-0">{formatTime(conversation.lastMessageAt)}</span>
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <p
-                        className={[
-                          'text-[13.5px] truncate',
-                          conversation.unreadCount >
-                          0
-                            ? 'font-bold text-ink'
-                            : 'font-medium text-ink',
-                        ].join(' ')}
-                      >
-                        {
-                          conversation.customerName
-                        }
-                      </p>
-
-                      <span className="text-[11px] text-slate shrink-0">
-                        {formatTime(
-                          conversation.lastMessageAt,
-                        )}
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <p className="text-[12.5px] text-slate truncate flex-1">{conversation.lastMessage}</p>
+                    {conversation.unreadCount > 0 && (
+                      <span className="bg-blue text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                        {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
                       </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <p className="text-[12.5px] text-slate truncate flex-1">
-                        {
-                          conversation.lastMessage
-                        }
-                      </p>
-
-                      {conversation.unreadCount >
-                        0 && (
-                        <span className="bg-blue text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                          {conversation.unreadCount >
-                          9
-                            ? '9+'
-                            : conversation.unreadCount}
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
-                </button>
-              ),
-            )
+                </div>
+              </button>
+            ))
           )}
         </div>
       </div>
 
-      {/* Chat thread */}
-      <div
-        className="lg:col-span-3 flex flex-col bg-white border border-sand rounded-[14px] overflow-hidden"
-        style={{ minHeight: 480 }}
-      >
+      {/* ── Chat thread ────────────────────────────────────────────────────── */}
+      <div className="lg:col-span-3 flex flex-col bg-white border border-sand rounded-[14px] overflow-hidden" style={{ minHeight: 480 }}>
         {!selected ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <MessageSquare
-                size={28}
-                className="text-sand-dark mx-auto mb-3"
-              />
-
-              <p className="text-[14px] text-slate">
-                Select a conversation
-              </p>
+              <MessageSquare size={28} className="text-sand-dark mx-auto mb-3" />
+              <p className="text-[14px] text-slate">Select a conversation</p>
             </div>
           </div>
         ) : (
           <>
-            {/* Chat header */}
+            {/* Header */}
             <div className="px-5 py-3.5 border-b border-sand flex items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-blue-light flex items-center justify-center font-serif font-semibold text-blue shrink-0 text-[13px]">
-                  {(
-                    selected.customerName ||
-                    'G'
-                  )[0].toUpperCase()}
+                  {(selected.customerName || 'G')[0].toUpperCase()}
                 </div>
-
                 <div className="min-w-0">
-                  <p className="font-semibold text-ink text-[14px] truncate">
-                    {
-                      selected.customerName
-                    }
-                  </p>
-
+                  <p className="font-semibold text-ink text-[14px] truncate">{selected.customerName}</p>
                   <div className="flex items-center gap-2 text-[12px] text-slate">
-                    <span
-                      className={[
-                        'w-1.5 h-1.5 rounded-full',
-                        socketStatus ===
-                        'connected'
-                          ? 'bg-green'
-                          : 'bg-sand-dark',
-                      ].join(' ')}
-                    />
-
-                    <span>
-                      {socketStatus ===
-                      'connected'
-                        ? 'Connected'
-                        : 'Offline'}
-                    </span>
+                    <span className={['w-1.5 h-1.5 rounded-full', socketStatus === 'connected' ? 'bg-green' : 'bg-sand-dark'].join(' ')} />
+                    <span>{socketStatus === 'connected' ? 'Connected' : 'Offline'}</span>
                   </div>
                 </div>
               </div>
-
-              <Badge variant="outline">
-                Live Chat
-              </Badge>
+              <Badge variant="outline">Live Chat</Badge>
             </div>
 
-            {/* Customer details */}
-            {(selected.customerEmail ||
-              selected.customerPhone) && (
+            {/* Customer contact details */}
+            {(selected.customerEmail || selected.customerPhone) && (
               <div className="px-5 py-2 border-b border-sand bg-ivory/40 flex flex-wrap gap-4 text-[11.5px] text-slate">
-                {selected.customerEmail && (
-                  <span>
-                    ✉️{' '}
-                    {
-                      selected.customerEmail
-                    }
-                  </span>
-                )}
-
+                {selected.customerEmail && <span>✉️ {selected.customerEmail}</span>}
                 {selected.customerPhone && (
-                  <span>
-                    <Phone
-                      size={11}
-                      className="inline mr-1"
-                    />
-                    {
-                      selected.customerPhone
-                    }
+                  <span className="flex items-center gap-1">
+                    <Phone size={11} className="shrink-0" />
+                    {selected.customerPhone}
                   </span>
                 )}
               </div>
@@ -1773,41 +1447,16 @@ function LiveChatPanel() {
               {conversationLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map(i => (
-                    <div
-                      key={i}
-                      className={`flex ${
-                        i % 2 === 0
-                          ? 'justify-end'
-                          : 'justify-start'
-                      }`}
-                    >
-                      <Skeleton
-                        height={48}
-                        className={
-                          i % 2 === 0
-                            ? 'w-2/3'
-                            : 'w-1/2'
-                        }
-                      />
+                    <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
+                      <Skeleton height={48} className={i % 2 === 0 ? 'w-2/3' : 'w-1/2'} />
                     </div>
                   ))}
                 </div>
-              ) : selected.messages.length ===
-                0 ? (
-                <p className="text-center text-[13px] text-slate py-8">
-                  No messages yet
-                </p>
+              ) : selected.messages.length === 0 ? (
+                <p className="text-center text-[13px] text-slate py-8">No messages yet</p>
               ) : (
-                selected.messages.map(
-                  message => (
-                    <LiveChatBubble
-                      key={message.id}
-                      message={message}
-                    />
-                  ),
-                )
+                selected.messages.map(message => <LiveChatBubble key={message.id} message={message} />)
               )}
-
               <div ref={bottomRef} />
             </div>
 
@@ -1817,18 +1466,10 @@ function LiveChatPanel() {
                 <textarea
                   ref={textareaRef}
                   value={replyText}
-                  onChange={e =>
-                    setReplyText(
-                      e.target.value,
-                    )
-                  }
+                  onChange={e => setReplyText(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message… (Enter to send)"
-                  disabled={
-                    sending ||
-                    socketStatus !==
-                      'connected'
-                  }
+                  disabled={sending || socketStatus !== 'connected'}
                   rows={2}
                   className={[
                     'flex-1 resize-none rounded-[10px] border border-sand px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate/60',
@@ -1836,21 +1477,12 @@ function LiveChatPanel() {
                     'disabled:bg-ivory disabled:cursor-not-allowed',
                   ].join(' ')}
                 />
-
                 <button
                   onClick={sendMessage}
-                  disabled={
-                    !replyText.trim() ||
-                    sending ||
-                    socketStatus !==
-                      'connected'
-                  }
+                  disabled={!replyText.trim() || sending || socketStatus !== 'connected'}
                   className={[
                     'w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all',
-                    replyText.trim() &&
-                    !sending &&
-                    socketStatus ===
-                      'connected'
+                    replyText.trim() && !sending && socketStatus === 'connected'
                       ? 'bg-blue text-white hover:bg-blue/80'
                       : 'bg-sand text-slate cursor-not-allowed',
                   ].join(' ')}
@@ -1858,11 +1490,7 @@ function LiveChatPanel() {
                   <Send size={16} />
                 </button>
               </div>
-
-              <p className="text-[11px] text-slate mt-1.5 text-right">
-                Shift+Enter for new line · Enter
-                to send
-              </p>
+              <p className="text-[11px] text-slate mt-1.5 text-right">Shift+Enter for new line · Enter to send</p>
             </div>
           </>
         )}

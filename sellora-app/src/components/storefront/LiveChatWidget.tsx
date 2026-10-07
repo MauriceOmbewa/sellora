@@ -180,6 +180,8 @@ export default function LiveChatWidget() {
         if (data.type === 'auth.success') {
           clearConnectTimeout()
           setConnected(true)
+          // Tell the business we've seen all their messages so far
+          ws.send(JSON.stringify({ type: 'read' }))
           return
         }
         if (data.type === 'chat.message' && data.message) {
@@ -187,6 +189,10 @@ export default function LiveChatWidget() {
           setMessages(prev =>
             prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming]
           )
+          // If business sent a message and we're watching, mark it read immediately
+          if (data.message.sender_type === 'business' && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'read' }))
+          }
         }
         if (data.type === 'error') console.error('[chat]', data.message)
       } catch { /* ignore parse errors */ }
